@@ -93,7 +93,7 @@ export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChe
                { data: horsesAll, error: horsesAllErr }] = await Promise.all([
           supabase.from('horses').select('*').eq('id', horseId).single(),
           supabase.from('genealogy').select('*').eq('horse_id', horseId).maybeSingle(),
-          supabase.from('health_events').select('*').eq('horse_id', horseId).order('opened_at', { ascending: false }),
+          supabase.from('health_events').select('*').eq('horse_id', horseId).order('occurred_at', { ascending: false }),
           supabase.from('horses').select('id, name, color_hex, is_active'),
         ])
 
@@ -143,17 +143,17 @@ export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChe
   const color = horse.color_hex ?? HORSE_COLORS[horse.name] ?? '#2f6b3f'
   const activeEventCount = healthEvents.filter(e => e.status !== 'closed').length
 
-  // Calcul de l'âge depuis born_at (colonne Supabase correcte)
-  const age = horse.born_at
-    ? new Date().getFullYear() - new Date(horse.born_at).getFullYear()
+  // Calcul de l'âge depuis birth_date
+  const age = horse.birth_date
+    ? new Date().getFullYear() - new Date(horse.birth_date).getFullYear()
     : null
 
-  // Résoudre les IDs de parents en noms cliquables (colonnes pere_id / mere_id)
+  // Résoudre les IDs de parents en noms cliquables
   const findHorseById = (id: string | null) =>
     id ? allHorses.find(h => h.id === id) ?? null : null
 
-  const fatherHorse = findHorseById(genealogy?.pere_id ?? null)
-  const motherHorse = findHorseById(genealogy?.mere_id ?? null)
+  const fatherHorse = findHorseById(genealogy?.father_id ?? null)
+  const motherHorse = findHorseById(genealogy?.mother_id ?? null)
 
   return (
     <div className="flex-1 flex flex-col overflow-y-auto no-scrollbar">
@@ -199,7 +199,7 @@ export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChe
         {/* Identité */}
         <SectionTitle icon={User} title="Identité" />
         <div className="bg-white rounded-xl px-4 py-1 shadow-xs">
-          <InfoRow label="Date de naissance" value={formatDate(horse.born_at)} />
+          <InfoRow label="Date de naissance" value={formatDate(horse.birth_date)} />
           <InfoRow label="Robe" value={horse.robe} />
           <InfoRow label="Nom SIRE" value={horse.sire_name} />
           <InfoRow label="N° SIRE" value={horse.sire_number} />
@@ -219,13 +219,13 @@ export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChe
           </a>
         )}
 
-        {/* Généalogie — colonnes pere_name / mere_name */}
-        {genealogy && (genealogy.pere_name || genealogy.mere_name) && (
+        {/* Généalogie */}
+        {genealogy && (genealogy.father_name || genealogy.mother_name) && (
           <>
             <SectionTitle icon={Award} title="Généalogie" />
             <div className="bg-white rounded-xl px-4 py-1 shadow-xs">
               {/* Père */}
-              {genealogy.pere_name && (
+              {genealogy.father_name && (
                 <div className="flex justify-between items-center py-2.5 border-b border-gray-100/80">
                   <span className="text-xs text-gray-500 font-medium">Père</span>
                   {fatherHorse ? (
@@ -233,16 +233,16 @@ export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChe
                       onClick={() => onSelectHorse(fatherHorse.id)}
                       className="text-xs font-bold text-primary flex items-center gap-1 cursor-pointer"
                     >
-                      {genealogy.pere_name}
+                      {genealogy.father_name}
                       <ChevronRightIcon />
                     </button>
                   ) : (
-                    <span className="text-xs font-semibold text-gray-800">{genealogy.pere_name}</span>
+                    <span className="text-xs font-semibold text-gray-800">{genealogy.father_name}</span>
                   )}
                 </div>
               )}
               {/* Mère */}
-              {genealogy.mere_name && (
+              {genealogy.mother_name && (
                 <div className="flex justify-between items-center py-2.5 border-b border-gray-100/80">
                   <span className="text-xs text-gray-500 font-medium">Mère</span>
                   {motherHorse ? (
@@ -250,11 +250,11 @@ export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChe
                       onClick={() => onSelectHorse(motherHorse.id)}
                       className="text-xs font-bold text-primary flex items-center gap-1 cursor-pointer"
                     >
-                      {genealogy.mere_name}
+                      {genealogy.mother_name}
                       <ChevronRightIcon />
                     </button>
                   ) : (
-                    <span className="text-xs font-semibold text-gray-800">{genealogy.mere_name}</span>
+                    <span className="text-xs font-semibold text-gray-800">{genealogy.mother_name}</span>
                   )}
                 </div>
               )}
@@ -283,7 +283,7 @@ export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChe
               <div key={event.id} className="bg-white rounded-xl p-4 shadow-xs">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-gray-800 leading-tight">{event.note ?? 'Événement médical'}</p>
+                    <p className="text-sm font-bold text-gray-800 leading-tight">{event.description ?? 'Événement médical'}</p>
                   </div>
                   <StatusBadge status={event.status} />
                 </div>
@@ -291,7 +291,7 @@ export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChe
                   <Stars count={event.severity} />
                   <div className="flex items-center gap-1 text-[10px] text-gray-400">
                     <Clock className="w-2.5 h-2.5" />
-                    {formatDateTime(event.occurred_at ?? event.opened_at)}
+                    {formatDateTime(event.occurred_at)}
                   </div>
                 </div>
               </div>
