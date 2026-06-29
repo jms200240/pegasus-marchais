@@ -27,6 +27,7 @@ export interface Genealogy {
   mother_name: string | null     // Nom de la mère (texte libre)
   father_id: string | null       // FK vers horses (optionnel)
   mother_id: string | null       // FK vers horses (optionnel)
+  pdm_name: string | null
 }
 
 export interface HealthEvent {
