@@ -11,6 +11,7 @@ import Soins from './pages/Soins'
 import Chevaux from './pages/Chevaux'
 import FicheCheval from './pages/FicheCheval'
 import Finances from './pages/Finances'
+import GaleriePhotos from './pages/GaleriePhotos'
 
 function App() {
   const [session, setSession] = useState<Session | null>(null)
@@ -63,6 +64,8 @@ function App() {
           )
         }
         return <Chevaux onSelectHorse={(id) => setSelectedHorseId(id)} />
+      case 'galerie':
+        return <GaleriePhotos />
       case 'finances':
         return <Finances />
       default:
