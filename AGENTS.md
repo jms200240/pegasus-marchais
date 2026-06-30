@@ -39,3 +39,4 @@ PWA mobile-first de gestion santé équin pour l'élevage Scalbert (Les Marchais
 - occurred_at = horodatage terrain éditable (calendrier + HH:MM)
 - Gravité bobos : 1 à 5 étoiles
 - Groom : 7,00€ TTC par jour calendaire
+- Dans chaque prompt touchant `types.ts` ou les fiches, il faut relire d'abord `types.ts` existant comme référence et ne jamais renommer un champ vers de l'anglais.
