@@ -294,7 +294,7 @@ export default function VisiteSheet({ onClose }: VisiteSheetProps) {
     setAmbianceMessage(null)
     try {
       const visitedAtISO = fromDatetimeLocal(visitedAt)
-      const rows: { visited_at: string; photo_url: string }[] = []
+      const rows: { visited_at: string; photo_url: string; storage_path: string }[] = []
 
       for (const file of files) {
         const path = `${Date.now()}-${file.name}`
@@ -309,7 +309,7 @@ export default function VisiteSheet({ onClose }: VisiteSheetProps) {
         if (signedErr) throw signedErr
 
         if (signedData?.signedUrl) {
-          rows.push({ visited_at: visitedAtISO, photo_url: signedData.signedUrl })
+          rows.push({ visited_at: visitedAtISO, photo_url: signedData.signedUrl, storage_path: path })
         }
       }
 
@@ -369,7 +369,11 @@ export default function VisiteSheet({ onClose }: VisiteSheetProps) {
               type="button"
               onClick={handleAllStable}
               disabled={bulkSaving || bobos.length === 0}
-              className="w-full mt-2.5 flex items-center justify-center gap-2 font-bold text-sm py-3 rounded-xl border-2 border-gray-200 bg-white text-gray-600 cursor-pointer hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className={`w-full mt-2.5 flex items-center justify-center gap-2 font-bold text-sm py-3 rounded-xl border-2 cursor-pointer transition-colors ${
+                bobos.length === 0
+                  ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'border-gray-700 bg-gray-700 text-white hover:bg-gray-800 active:scale-[0.98]'
+              } disabled:active:scale-100`}
             >
               <CheckCircle className="w-4 h-4" />
               {bulkSaving ? 'Enregistrement…' : 'Rien à signaler — bobos stables'}
