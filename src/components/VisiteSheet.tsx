@@ -76,6 +76,13 @@ export default function VisiteSheet({ onClose }: VisiteSheetProps) {
   // ── Validation en masse "Rien à signaler" ─────────────────────────────────
   const [bulkSaving, setBulkSaving] = useState(false)
   const [bulkError, setBulkError] = useState<string | null>(null)
+  const [stableAllDone, setStableAllDone] = useState(false)
+
+  // ── Suivi des bobos modifiés individuellement durant la session ──────────
+  const [touchedIds, setTouchedIds] = useState<Set<string>>(new Set())
+  const [remainingSaving, setRemainingSaving] = useState(false)
+  const [remainingError, setRemainingError] = useState<string | null>(null)
+  const [remainingDone, setRemainingDone] = useState(false)
 
   // ── Photos d'ambiance ──────────────────────────────────────────────────────
   const [ambianceUploading, setAmbianceUploading] = useState(false)
@@ -239,8 +246,9 @@ export default function VisiteSheet({ onClose }: VisiteSheetProps) {
         .eq('id', eventId)
       if (updateErr) throw updateErr
 
-      // Referme l'accordéon et rafraîchit la liste
+      // Referme l'accordéon, marque ce bobo comme "modifié" et rafraîchit la liste
       setOpenBoboId(null)
+      setTouchedIds(prev => new Set(prev).add(eventId))
       await fetchBobos()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : JSON.stringify(err)
@@ -277,10 +285,50 @@ export default function VisiteSheet({ onClose }: VisiteSheetProps) {
         if (updateErr) throw updateErr
       }
       await fetchBobos()
+      setStableAllDone(true)
     } catch (err: unknown) {
       setBulkError(err instanceof Error ? err.message : JSON.stringify(err))
     } finally {
       setBulkSaving(false)
+    }
+  }
+
+  // ─── Validation des bobos non touchés individuellement ("Pour les autres") ──
+  async function handleRemainingStable() {
+    const remaining = bobos.filter(b => !touchedIds.has(b.event.id))
+    if (remaining.length === 0) {
+      setRemainingDone(true)
+      return
+    }
+    setRemainingSaving(true)
+    setRemainingError(null)
+    try {
+      const visitedAtISO = fromDatetimeLocal(visitedAt)
+      for (const bobo of remaining) {
+        const currentSeverity = bobo.lastVisit?.severity ?? bobo.event.severity
+        const { error: insertErr } = await supabase
+          .from('health_event_visits')
+          .insert({
+            health_event_id: bobo.event.id,
+            status:          'active',
+            severity:        currentSeverity,
+            note:            'Stable',
+            visited_at:      visitedAtISO,
+          })
+        if (insertErr) throw insertErr
+
+        const { error: updateErr } = await supabase
+          .from('health_events')
+          .update({ status: 'active', severity: currentSeverity, closed_at: null })
+          .eq('id', bobo.event.id)
+        if (updateErr) throw updateErr
+      }
+      await fetchBobos()
+      setRemainingDone(true)
+    } catch (err: unknown) {
+      setRemainingError(err instanceof Error ? err.message : JSON.stringify(err))
+    } finally {
+      setRemainingSaving(false)
     }
   }
 
@@ -352,7 +400,7 @@ export default function VisiteSheet({ onClose }: VisiteSheetProps) {
         </div>
 
         {/* ── Contenu scrollable ── */}
-        <div className="flex-1 overflow-y-auto no-scrollbar px-4 pb-6 pt-4 space-y-5">
+        <div className="flex-1 overflow-y-auto no-scrollbar px-4 pb-24 pt-4 space-y-5">
 
           {/* ── Horodatage de la session ── */}
           <section>
@@ -365,23 +413,37 @@ export default function VisiteSheet({ onClose }: VisiteSheetProps) {
               onChange={e => setVisitedAt(e.target.value)}
               className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 text-gray-700"
             />
-            <button
-              type="button"
-              onClick={handleAllStable}
-              disabled={bulkSaving || bobos.length === 0}
-              className={`w-full mt-2.5 flex items-center justify-center gap-2 font-bold text-sm py-3 rounded-xl border-2 cursor-pointer transition-colors ${
-                bobos.length === 0
-                  ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'border-gray-700 bg-gray-700 text-white hover:bg-gray-800 active:scale-[0.98]'
-              } disabled:active:scale-100`}
-            >
-              <CheckCircle className="w-4 h-4" />
-              {bulkSaving ? 'Enregistrement…' : 'Rien à signaler — bobos stables'}
-            </button>
-            {bulkError && (
-              <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mt-2">
-                {bulkError}
-              </p>
+            {touchedIds.size === 0 && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleAllStable}
+                  disabled={bulkSaving || bobos.length === 0}
+                  className={`w-full mt-2.5 flex items-center justify-center gap-2 font-bold text-sm py-3 rounded-xl border-2 cursor-pointer transition-colors ${
+                    bobos.length === 0
+                      ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'border-gray-700 bg-gray-700 text-white hover:bg-gray-800 active:scale-[0.98]'
+                  } disabled:active:scale-100`}
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  {bulkSaving ? 'Enregistrement…' : 'Rien à signaler — bobos stables'}
+                </button>
+                {bulkError && (
+                  <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mt-2">
+                    {bulkError}
+                  </p>
+                )}
+                {stableAllDone && (
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="w-full mt-2.5 flex items-center justify-center gap-2 font-bold text-sm py-3 rounded-xl text-white shadow-sm active:scale-[0.98] transition-transform cursor-pointer"
+                    style={{ backgroundColor: '#2f6b3f' }}
+                  >
+                    Fin de visite
+                  </button>
+                )}
+              </>
             )}
           </section>
 
@@ -569,6 +631,38 @@ export default function VisiteSheet({ onClose }: VisiteSheetProps) {
                     </div>
                   )
                 })}
+              </div>
+            )}
+
+            {/* ── Pour les autres bobos non modifiés / Fin de visite ── */}
+            {touchedIds.size > 0 && (
+              <div className="mt-3 space-y-2.5">
+                {touchedIds.size < bobos.length && !remainingDone && (
+                  <button
+                    type="button"
+                    onClick={handleRemainingStable}
+                    disabled={remainingSaving}
+                    className="w-full flex items-center justify-center gap-2 font-bold text-sm py-3 rounded-xl border-2 border-gray-700 bg-gray-700 text-white cursor-pointer hover:bg-gray-800 active:scale-[0.98] transition-colors disabled:opacity-60"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    {remainingSaving ? 'Enregistrement…' : 'Pour les autres bobos, rien à signaler'}
+                  </button>
+                )}
+                {remainingError && (
+                  <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                    {remainingError}
+                  </p>
+                )}
+                {(remainingDone || touchedIds.size === bobos.length) && (
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="w-full flex items-center justify-center gap-2 font-bold text-sm py-3 rounded-xl text-white shadow-sm active:scale-[0.98] transition-transform cursor-pointer"
+                    style={{ backgroundColor: '#2f6b3f' }}
+                  >
+                    Fin de visite
+                  </button>
+                )}
               </div>
             )}
 
