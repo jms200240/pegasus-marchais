@@ -72,6 +72,17 @@ export interface AmbiancePhoto {
   id: string
   visited_at: string
   photo_url: string
+  storage_path: string | null
+  created_at: string
+}
+
+export interface PhotoTag {
+  id: string
+  photo_id: string
+  tag_type: 'horse' | 'human'
+  label: string
+  horse_id: string | null
+  user_id: string | null
   created_at: string
 }
 
