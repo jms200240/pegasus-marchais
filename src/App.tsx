@@ -88,7 +88,7 @@ function App() {
   }
 
   return (
-    <div className="mobile-container min-h-screen flex flex-col justify-between">
+    <div className="mobile-container min-h-screen flex flex-col">
       {!session ? (
         <Login
           onLoginSuccess={() =>
@@ -118,15 +118,18 @@ function App() {
             </header>
           )}
 
-          {/* Contenu principal */}
-          <main className="flex-1 flex flex-col overflow-y-auto no-scrollbar min-h-0">
+          {/* Contenu principal — padding bas pour ne jamais passer sous la nav flottante */}
+          <main className="flex-1 flex flex-col overflow-y-auto no-scrollbar min-h-0 pb-24">
             {renderActivePage()}
           </main>
 
-          {/* Bottom nav — masquée aussi dans la fiche cheval pour plus d'espace */}
-          {!(activeTab === 'chevaux' && selectedHorseId) && (
+          {/* Bottom nav — TOUJOURS visible, flottante au-dessus de tous les écrans (y compris les overlays) */}
+          <div
+            className="fixed bottom-0 left-0 right-0 z-[100] w-full max-w-[390px] mx-auto"
+            style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+          >
             <BottomNav activeTab={activeTab} setActiveTab={handleTabChange} />
-          )}
+          </div>
         </>
       )}
     </div>
