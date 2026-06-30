@@ -721,60 +721,59 @@ export default function BoboWizard({ horses, onCreated, onClose }: BoboWizardPro
   return (
     <>
       {/* Overlay plein écran */}
-      <div className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm flex items-end justify-center">
-        <div className="w-full max-w-md bg-[#F6F2EC] rounded-t-3xl flex flex-col max-h-[92dvh]">
+      <div className="fixed inset-0 z-[60] bg-[#F6F2EC] flex flex-col">
 
-          {/* Header */}
-          <div className="flex items-center justify-between px-5 pt-5 pb-2 flex-shrink-0">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-              Étape {step}/{TOTAL_STEPS}
-            </p>
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 pt-5 pb-2 flex-shrink-0">
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+            Étape {step}/{TOTAL_STEPS}
+          </p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center rounded-full bg-white shadow-sm cursor-pointer hover:bg-gray-50"
+          >
+            <X className="w-4 h-4 text-gray-500" />
+          </button>
+        </div>
+
+        {/* Indicateur de progression */}
+        <div className="px-5 flex-shrink-0">
+          <ProgressDots step={step} total={TOTAL_STEPS} />
+        </div>
+
+        {/* Contenu scrollable */}
+        <div className="flex-1 overflow-y-auto no-scrollbar px-5 pb-4">
+          {renderStep()}
+        </div>
+
+        {/* Barre de navigation */}
+        <div className="flex items-center gap-2 px-5 py-4 border-t border-gray-200/60 bg-white/70 flex-shrink-0 backdrop-blur-sm">
+          {step > 1 ? (
             <button
               type="button"
-              onClick={onClose}
-              className="w-8 h-8 flex items-center justify-center rounded-full bg-white shadow-sm cursor-pointer hover:bg-gray-50"
+              onClick={handlePrev}
+              className="flex items-center gap-1 text-sm font-bold text-gray-500 px-3 py-2.5 rounded-xl hover:bg-gray-100 cursor-pointer transition-colors"
             >
-              <X className="w-4 h-4 text-gray-500" />
+              <ChevronLeft className="w-4 h-4" />
+              Retour
             </button>
-          </div>
+          ) : (
+            <div className="w-16" />
+          )}
 
-          {/* Indicateur de progression */}
-          <div className="px-5 flex-shrink-0">
-            <ProgressDots step={step} total={TOTAL_STEPS} />
-          </div>
-
-          {/* Contenu scrollable */}
-          <div className="flex-1 overflow-y-auto no-scrollbar px-5 pb-4">
-            {renderStep()}
-          </div>
-
-          {/* Barre de navigation */}
-          <div className="flex items-center gap-2 px-5 py-4 border-t border-gray-200/60 bg-white/70 flex-shrink-0 backdrop-blur-sm">
-            {step > 1 ? (
-              <button
-                type="button"
-                onClick={handlePrev}
-                className="flex items-center gap-1 text-sm font-bold text-gray-500 px-3 py-2.5 rounded-xl hover:bg-gray-100 cursor-pointer transition-colors"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                Retour
-              </button>
-            ) : (
-              <div className="w-16" />
-            )}
-
-            {/* Bouton "Passer" pour étape 3 sans latéralité obligatoire */}
-            {showSkipLoc && (
-              <button
-                type="button"
-                onClick={() => {
-                  setZone('')
-                  setLateraliteCode(null)
-                  setRegion('')
-                  setFace('')
-                  setStep(s => s + 1)
-                }}
-                className="flex-1 text-sm font-bold text-gray-400 py-2.5 rounded-xl border border-gray-200 bg-white cursor-pointer hover:bg-gray-50 transition-colors"
+          {/* Bouton "Passer" pour étape 3 sans latéralité obligatoire */}
+          {showSkipLoc && (
+            <button
+              type="button"
+              onClick={() => {
+                setZone('')
+                setLateraliteCode(null)
+                setRegion('')
+                setFace('')
+                setStep(s => s + 1)
+              }}
+              className="flex-1 text-sm font-bold text-gray-400 py-2.5 rounded-xl border border-gray-200 bg-white cursor-pointer hover:bg-gray-50 transition-colors"
               >
                 Passer
               </button>
@@ -793,7 +792,6 @@ export default function BoboWizard({ horses, onCreated, onClose }: BoboWizardPro
               {saving ? 'Enregistrement…' : isLastStep ? 'Enregistrer le bobo' : 'Suivant →'}
             </button>
           </div>
-        </div>
       </div>
 
       {/* Fiche pathologie post-enregistrement */}
