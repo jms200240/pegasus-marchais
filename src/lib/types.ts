@@ -51,6 +51,16 @@ export interface HealthEvent {
   updated_at: string
 }
 
+export interface HealthEventVisit {
+  id: string
+  health_event_id: string
+  visited_at: string
+  status: 'open' | 'active' | 'closed'
+  severity: number
+  note: string | null
+  created_at: string
+}
+
 export interface Pathology {
   id: string
   category: string
