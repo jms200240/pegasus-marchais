@@ -33,11 +33,41 @@ export interface Genealogy {
 export interface HealthEvent {
   id: string
   horse_id: string
-  title: string
-  note: string | null
-  severity: number               // 1 à 5 étoiles
-  status: 'open' | 'active' | 'closed'
+  pathology_id: string | null
   opened_at: string              // ISO timestamp — horodatage terrain éditable
+  occurred_at: string | null
+  closed_at: string | null
+  type: 'veterinaire' | 'marechal' | 'dentiste' | 'osteo' | 'groom' | 'autre' | null
+  location: string | null
+  laterality: string | null
+  severity: number               // 1 à 5 étoiles
+  severity_max: number | null
+  status: 'open' | 'active' | 'closed'
+  note: string | null
+  photo_url: string | null
+  attachment_urls: string[] | null
+  photo_urls: string[] | null    // URLs signées Supabase Storage (bucket bobo-photos)
+  created_at: string
+  updated_at: string
+}
+
+export interface Pathology {
+  id: string
+  category: string
+  cat_letter: string | null
+  name: string
+  variants: string[] | null
+  location: string | null
+  has_laterality: boolean
+  default_severity: number | null
+  is_urgent: boolean
+  definition: string | null
+  signs: string | null
+  conduct: string | null
+  prevention: string | null
+  source_name: string | null
+  source_url: string | null
+  freq_score: number | null
   created_at: string
 }
 
