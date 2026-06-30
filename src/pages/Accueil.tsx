@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import type { Horse, HealthEvent, FarmAlert } from '../lib/types'
-import { CANONICAL_ORDER, HORSE_COLORS } from '../lib/types'
-import { CheckCircle, Wheat, Droplets, CalendarCheck } from 'lucide-react'
+import type { AmbiancePhoto, FarmAlert } from '../lib/types'
+import { formatDateTime } from '../lib/types'
+import { Wheat, Droplets, CalendarCheck, Image as ImageIcon } from 'lucide-react'
 import VisiteSheet from '../components/VisiteSheet'
 
 // ─── Spinner inline ──────────────────────────────────────────────────────────
@@ -17,21 +17,10 @@ function Spinner() {
   )
 }
 
-// ─── Étoiles gravité (lecture seule) ─────────────────────────────────────────
-function Stars({ count }: { count: number }) {
-  return (
-    <span className="text-amber-400 text-xs leading-none">
-      {'★'.repeat(Math.min(count, 5))}
-      <span className="text-gray-200">{'★'.repeat(Math.max(0, 5 - count))}</span>
-    </span>
-  )
-}
-
 // ─── Page Accueil ─────────────────────────────────────────────────────────────
 export default function Accueil() {
-  const [horses,  setHorses]  = useState<Horse[]>([])
-  const [events,  setEvents]  = useState<HealthEvent[]>([])
-  const [alerts,  setAlerts]  = useState<Record<string, boolean>>({ foin: false, eau: false })
+  const [alerts, setAlerts] = useState<Record<string, boolean>>({ foin: false, eau: false })
+  const [latestPhoto, setLatestPhoto] = useState<AmbiancePhoto | null>(null)
   const [loading, setLoading] = useState(true)
   const [visiteOpen, setVisiteOpen] = useState(false)
 
@@ -39,27 +28,24 @@ export default function Accueil() {
     setLoading(true)
     try {
       const [
-        { data: horsesData, error: horsesErr },
-        { data: eventsData, error: eventsErr },
         { data: alertsData, error: alertsErr },
+        { data: photoData, error: photoErr },
       ] = await Promise.all([
-        supabase.from('horses').select('*'),
-        supabase
-          .from('health_events')
-          .select('*')
-          .in('status', ['open', 'active']),
         supabase.from('farm_alerts').select('*'),
+        supabase
+          .from('ambiance_photos')
+          .select('*')
+          .order('visited_at', { ascending: false })
+          .limit(1),
       ])
-      if (horsesErr) throw horsesErr
-      if (eventsErr) throw eventsErr
       if (alertsErr) throw alertsErr
-
-      setHorses(horsesData ?? [])
-      setEvents(eventsData ?? [])
+      if (photoErr) throw photoErr
 
       const map: Record<string, boolean> = {}
       ;(alertsData as FarmAlert[] ?? []).forEach(a => { map[a.key] = a.active })
       setAlerts(map)
+
+      setLatestPhoto(photoData && photoData.length > 0 ? photoData[0] : null)
     } catch (err) {
       console.error('Erreur chargement Accueil:', err)
     } finally {
@@ -74,33 +60,6 @@ export default function Accueil() {
     setVisiteOpen(false)
     fetchData()
   }
-
-  // ─── Calculs dérivés ────────────────────────────────────────────────────
-  const activeHorses = horses.filter(h => h.is_active)
-  const activeEvents = events.filter(e => e.status !== 'closed')
-
-  // Par cheval : nb de bobos actifs + gravité max
-  interface HorseSummary {
-    horse: Horse
-    count: number
-    maxSeverity: number
-  }
-
-  const horseSummaries: HorseSummary[] = activeHorses
-    .map(horse => {
-      const horseEvents = activeEvents.filter(e => e.horse_id === horse.id)
-      const maxSeverity = horseEvents.reduce((max, e) => Math.max(max, e.severity), 0)
-      return { horse, count: horseEvents.length, maxSeverity }
-    })
-    .filter(s => s.count > 0)
-    .sort((a, b) => {
-      const ia = CANONICAL_ORDER.indexOf(a.horse.name as typeof CANONICAL_ORDER[number])
-      const ib = CANONICAL_ORDER.indexOf(b.horse.name as typeof CANONICAL_ORDER[number])
-      if (ia === -1 && ib === -1) return a.horse.name.localeCompare(b.horse.name)
-      if (ia === -1) return 1
-      if (ib === -1) return -1
-      return ia - ib
-    })
 
   const foinActif = alerts['foin'] === true
   const eauActive = alerts['eau'] === true
@@ -150,45 +109,30 @@ export default function Accueil() {
                 Démarrer une visite
               </button>
 
-              {/* ── Bobos actifs ── */}
+              {/* ── Dernière photo d'ambiance ── */}
               <section>
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
-                  Bobos actifs
+                  Dernière photo
                 </p>
 
-                {horseSummaries.length === 0 ? (
-                  <div className="bg-white rounded-xl p-5 shadow-xs text-center">
-                    <CheckCircle className="w-8 h-8 text-green-400 mx-auto mb-2" />
-                    <p className="text-sm font-semibold text-gray-700">Tous les chevaux vont bien.</p>
+                {latestPhoto ? (
+                  <div className="bg-white rounded-xl overflow-hidden shadow-xs">
+                    <img
+                      src={latestPhoto.photo_url}
+                      alt="Dernière photo d'ambiance"
+                      className="w-full aspect-[4/3] object-cover"
+                    />
+                    <p className="text-[10px] text-gray-400 px-3 py-2">
+                      {formatDateTime(latestPhoto.visited_at)}
+                    </p>
                   </div>
                 ) : (
-                  <div className="space-y-2">
-                    {horseSummaries.map(({ horse, count, maxSeverity }) => {
-                      const color = horse.color_hex ?? HORSE_COLORS[horse.name] ?? '#2f6b3f'
-                      return (
-                        <div
-                          key={horse.id}
-                          className="bg-white rounded-xl px-4 py-3 shadow-xs flex items-center gap-3"
-                        >
-                          {/* Badge cheval */}
-                          <span
-                            className="text-[10px] font-bold px-2.5 py-1 rounded-full text-white flex-shrink-0"
-                            style={{ backgroundColor: color }}
-                          >
-                            {horse.name}
-                          </span>
-
-                          {/* Nombre de bobos */}
-                          <span className="flex-1 text-xs text-gray-600">
-                            <span className="font-bold text-gray-800">{count}</span>{' '}
-                            bobo{count > 1 ? 's' : ''} actif{count > 1 ? 's' : ''}
-                          </span>
-
-                          {/* Gravité max */}
-                          <Stars count={maxSeverity} />
-                        </div>
-                      )
-                    })}
+                  <div className="bg-white rounded-xl p-5 shadow-xs text-center">
+                    <ImageIcon className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                    <p className="text-sm font-semibold text-gray-700">Aucune photo pour l'instant</p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Ajoutez-en une depuis "Démarrer une visite".
+                    </p>
                   </div>
                 )}
               </section>
