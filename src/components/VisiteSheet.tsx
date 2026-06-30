@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import type { Horse, HealthEvent, HealthEventVisit, Pathology, FarmAlert } from '../lib/types'
 import { CANONICAL_ORDER, HORSE_COLORS } from '../lib/types'
 import { X, ChevronDown, ChevronUp, Plus, Wheat, Droplets } from 'lucide-react'
-import { getBoboTitle, Stars } from './BoboCard'
+import { getBoboTitle, Stars, VisitModal } from './BoboCard'
 import BoboWizard from './BoboWizard'
 
 // ─── Utilitaire datetime-local ────────────────────────────────────────────────
@@ -70,6 +70,9 @@ export default function VisiteSheet({ onClose }: VisiteSheetProps) {
   const [savingBoboId, setSavingBoboId] = useState<string | null>(null)
   const [boboErrors, setBoboErrors] = useState<Record<string, string>>({})
 
+  // ── VisitModal suivi complet ──────────────────────────────────────────────
+  const [visitModalBoboId, setVisitModalBoboId] = useState<string | null>(null)
+
   // ── BoboWizard ───────────────────────────────────────────────────────────
   const [wizardOpen, setWizardOpen] = useState(false)
   const [horses, setHorses] = useState<Horse[]>([])
@@ -124,17 +127,17 @@ export default function VisiteSheet({ onClose }: VisiteSheetProps) {
       if (eventsErr) throw eventsErr
       if (pathoErr)  throw pathoErr
 
-      const horsesArr: Horse[]    = horsesData    ?? []
+      const horsesArr: Horse[]       = horsesData ?? []
       const eventsArr: HealthEvent[] = eventsData ?? []
-      const pathoArr: Pathology[] = pathoData     ?? []
+      const pathoArr: Pathology[]    = pathoData  ?? []
 
       setHorses(horsesArr.filter(h => h.is_active))
 
       // Fetch la dernière visite de chaque bobo actif
       const boboList: ActiveBobo[] = []
       for (const event of eventsArr) {
-        const horse   = horsesArr.find(h => h.id === event.horse_id) ?? null
-        const patho   = event.pathology_id
+        const horse = horsesArr.find(h => h.id === event.horse_id) ?? null
+        const patho = event.pathology_id
           ? pathoArr.find(p => p.id === event.pathology_id) ?? null
           : null
 
@@ -188,7 +191,7 @@ export default function VisiteSheet({ onClose }: VisiteSheetProps) {
     return evolution === 'Résolu' ? 'closed' : 'active'
   }
 
-  // ─── Enregistrer une évolution ────────────────────────────────────────────
+  // ─── Enregistrer une évolution rapide ────────────────────────────────────
   async function handleEvolution(bobo: ActiveBobo, evolution: Evolution) {
     const eventId = bobo.event.id
     setSavingBoboId(eventId)
@@ -238,6 +241,11 @@ export default function VisiteSheet({ onClose }: VisiteSheetProps) {
       setSavingBoboId(null)
     }
   }
+
+  // ─── VisitModal bobo résolu (pour fermer l'accordéon après onSaved) ──────
+  const visitModalBobo = visitModalBoboId !== null
+    ? bobos.find(b => b.event.id === visitModalBoboId) ?? null
+    : null
 
   // ─── Rendu ────────────────────────────────────────────────────────────────
   return (
@@ -391,28 +399,9 @@ export default function VisiteSheet({ onClose }: VisiteSheetProps) {
                             Évolution constatée
                           </p>
 
+                          {/* Grid 2×2 : Aggravé / Amélioré / Stable / Résolu */}
                           <div className="grid grid-cols-2 gap-2">
-                            {/* Amélioré */}
-                            <button
-                              type="button"
-                              disabled={isSaving}
-                              onClick={() => handleEvolution(bobo, 'Amélioré')}
-                              className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 border-blue-200 bg-blue-50 text-blue-700 font-bold text-xs cursor-pointer hover:bg-blue-100 transition-all active:scale-[0.97] disabled:opacity-50"
-                            >
-                              ↗ Amélioré
-                            </button>
-
-                            {/* Stable */}
-                            <button
-                              type="button"
-                              disabled={isSaving}
-                              onClick={() => handleEvolution(bobo, 'Stable')}
-                              className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 border-gray-200 bg-gray-50 text-gray-600 font-bold text-xs cursor-pointer hover:bg-gray-100 transition-all active:scale-[0.97] disabled:opacity-50"
-                            >
-                              → Stable
-                            </button>
-
-                            {/* Aggravé */}
+                            {/* Haut-gauche : Aggravé */}
                             <button
                               type="button"
                               disabled={isSaving}
@@ -422,7 +411,27 @@ export default function VisiteSheet({ onClose }: VisiteSheetProps) {
                               ↘ Aggravé
                             </button>
 
-                            {/* Résolu */}
+                            {/* Haut-droite : Amélioré */}
+                            <button
+                              type="button"
+                              disabled={isSaving}
+                              onClick={() => handleEvolution(bobo, 'Amélioré')}
+                              className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 border-blue-200 bg-blue-50 text-blue-700 font-bold text-xs cursor-pointer hover:bg-blue-100 transition-all active:scale-[0.97] disabled:opacity-50"
+                            >
+                              ↗ Amélioré
+                            </button>
+
+                            {/* Bas-gauche : Stable */}
+                            <button
+                              type="button"
+                              disabled={isSaving}
+                              onClick={() => handleEvolution(bobo, 'Stable')}
+                              className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 border-gray-200 bg-gray-50 text-gray-600 font-bold text-xs cursor-pointer hover:bg-gray-100 transition-all active:scale-[0.97] disabled:opacity-50"
+                            >
+                              → Stable
+                            </button>
+
+                            {/* Bas-droite : Résolu */}
                             <button
                               type="button"
                               disabled={isSaving}
@@ -439,6 +448,17 @@ export default function VisiteSheet({ onClose }: VisiteSheetProps) {
                               Enregistrement…
                             </p>
                           )}
+
+                          {/* Lien suivi complet */}
+                          <div className="text-center pt-1">
+                            <button
+                              type="button"
+                              onClick={() => setVisitModalBoboId(event.id)}
+                              className="text-[11px] text-gray-400 hover:text-gray-600 underline underline-offset-2 cursor-pointer transition-colors"
+                            >
+                              Modifier (commentaire, gravité, photo)
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -467,6 +487,21 @@ export default function VisiteSheet({ onClose }: VisiteSheetProps) {
           horses={horses}
           onCreated={fetchBobos}
           onClose={() => setWizardOpen(false)}
+        />
+      )}
+
+      {/* ── VisitModal suivi complet ── */}
+      {visitModalBobo !== null && (
+        <VisitModal
+          event={visitModalBobo.event}
+          currentSeverity={visitModalBobo.lastVisit?.severity ?? visitModalBobo.event.severity}
+          defaultVisitedAt={fromDatetimeLocal(visitedAt)}
+          onClose={() => setVisitModalBoboId(null)}
+          onSaved={() => {
+            setVisitModalBoboId(null)
+            setOpenBoboId(null)
+            fetchBobos()
+          }}
         />
       )}
     </>
