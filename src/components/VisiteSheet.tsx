@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Horse, HealthEvent, HealthEventVisit, Pathology, FarmAlert } from '../lib/types'
 import { CANONICAL_ORDER, HORSE_COLORS } from '../lib/types'
-import { X, ChevronDown, ChevronUp, Plus, Wheat, Droplets } from 'lucide-react'
+import { X, ChevronDown, ChevronUp, Plus, Wheat, Droplets, CheckCircle, Camera } from 'lucide-react'
 import { getBoboTitle, Stars, VisitModal } from './BoboCard'
 import BoboWizard from './BoboWizard'
 
@@ -72,6 +72,14 @@ export default function VisiteSheet({ onClose }: VisiteSheetProps) {
 
   // ── VisitModal suivi complet ──────────────────────────────────────────────
   const [visitModalBoboId, setVisitModalBoboId] = useState<string | null>(null)
+
+  // ── Validation en masse "Rien à signaler" ─────────────────────────────────
+  const [bulkSaving, setBulkSaving] = useState(false)
+  const [bulkError, setBulkError] = useState<string | null>(null)
+
+  // ── Photos d'ambiance ──────────────────────────────────────────────────────
+  const [ambianceUploading, setAmbianceUploading] = useState(false)
+  const [ambianceMessage, setAmbianceMessage] = useState<string | null>(null)
 
   // ── BoboWizard ───────────────────────────────────────────────────────────
   const [wizardOpen, setWizardOpen] = useState(false)
@@ -242,6 +250,84 @@ export default function VisiteSheet({ onClose }: VisiteSheetProps) {
     }
   }
 
+  // ─── Validation en masse de tous les bobos actifs ("Stable") ────────────
+  async function handleAllStable() {
+    if (bobos.length === 0) return
+    setBulkSaving(true)
+    setBulkError(null)
+    try {
+      const visitedAtISO = fromDatetimeLocal(visitedAt)
+      for (const bobo of bobos) {
+        const currentSeverity = bobo.lastVisit?.severity ?? bobo.event.severity
+        const { error: insertErr } = await supabase
+          .from('health_event_visits')
+          .insert({
+            health_event_id: bobo.event.id,
+            status:          'active',
+            severity:        currentSeverity,
+            note:            'Stable',
+            visited_at:      visitedAtISO,
+          })
+        if (insertErr) throw insertErr
+
+        const { error: updateErr } = await supabase
+          .from('health_events')
+          .update({ status: 'active', severity: currentSeverity, closed_at: null })
+          .eq('id', bobo.event.id)
+        if (updateErr) throw updateErr
+      }
+      await fetchBobos()
+    } catch (err: unknown) {
+      setBulkError(err instanceof Error ? err.message : JSON.stringify(err))
+    } finally {
+      setBulkSaving(false)
+    }
+  }
+
+  // ─── Upload des photos d'ambiance (non liées à un cheval/bobo) ──────────
+  async function handleAmbiancePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? [])
+    e.target.value = ''
+    if (files.length === 0) return
+
+    setAmbianceUploading(true)
+    setAmbianceMessage(null)
+    try {
+      const visitedAtISO = fromDatetimeLocal(visitedAt)
+      const rows: { visited_at: string; photo_url: string }[] = []
+
+      for (const file of files) {
+        const path = `${Date.now()}-${file.name}`
+        const { error: uploadErr } = await supabase.storage
+          .from('ambiance-photos')
+          .upload(path, file)
+        if (uploadErr) throw uploadErr
+
+        const { data: signedData, error: signedErr } = await supabase.storage
+          .from('ambiance-photos')
+          .createSignedUrl(path, 60 * 60 * 24 * 365)
+        if (signedErr) throw signedErr
+
+        if (signedData?.signedUrl) {
+          rows.push({ visited_at: visitedAtISO, photo_url: signedData.signedUrl })
+        }
+      }
+
+      if (rows.length > 0) {
+        const { error: insertErr } = await supabase.from('ambiance_photos').insert(rows)
+        if (insertErr) throw insertErr
+      }
+
+      setAmbianceMessage(`${rows.length} photo${rows.length > 1 ? 's' : ''} ajoutée${rows.length > 1 ? 's' : ''}.`)
+    } catch (err: unknown) {
+      setAmbianceMessage(
+        err instanceof Error ? `Erreur : ${err.message}` : "Erreur lors de l'envoi."
+      )
+    } finally {
+      setAmbianceUploading(false)
+    }
+  }
+
   // ─── VisitModal bobo résolu (pour fermer l'accordéon après onSaved) ──────
   const visitModalBobo = visitModalBoboId !== null
     ? bobos.find(b => b.event.id === visitModalBoboId) ?? null
@@ -279,6 +365,20 @@ export default function VisiteSheet({ onClose }: VisiteSheetProps) {
               onChange={e => setVisitedAt(e.target.value)}
               className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 text-gray-700"
             />
+            <button
+              type="button"
+              onClick={handleAllStable}
+              disabled={bulkSaving || bobos.length === 0}
+              className="w-full mt-2.5 flex items-center justify-center gap-2 font-bold text-sm py-3 rounded-xl border-2 border-gray-200 bg-white text-gray-600 cursor-pointer hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <CheckCircle className="w-4 h-4" />
+              {bulkSaving ? 'Enregistrement…' : 'Rien à signaler — bobos stables'}
+            </button>
+            {bulkError && (
+              <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mt-2">
+                {bulkError}
+              </p>
+            )}
           </section>
 
           {/* ── Approvisionnement ── */}
@@ -478,6 +578,26 @@ export default function VisiteSheet({ onClose }: VisiteSheetProps) {
               <Plus className="w-4 h-4" />
               Nouveau bobo
             </button>
+
+            {/* ── Bouton Photo d'ambiance ── */}
+            <label
+              className="mt-2.5 w-full flex items-center justify-center gap-2 font-bold text-sm py-3 rounded-xl text-white shadow-sm active:scale-[0.98] transition-transform cursor-pointer"
+              style={{ backgroundColor: ambianceUploading ? '#A9B7E0' : '#7B93D4' }}
+            >
+              <Camera className="w-4 h-4" />
+              {ambianceUploading ? 'Envoi…' : "Photo d'ambiance"}
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleAmbiancePhotoSelect}
+                disabled={ambianceUploading}
+                className="hidden"
+              />
+            </label>
+            {ambianceMessage && (
+              <p className="text-[11px] text-gray-500 text-center mt-1.5">{ambianceMessage}</p>
+            )}
           </section>
         </div>
       </div>
