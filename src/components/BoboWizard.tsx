@@ -722,7 +722,7 @@ export default function BoboWizard({ horses, onCreated, onClose }: BoboWizardPro
     <>
       {/* Overlay plein écran */}
       <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm flex items-end justify-center">
-        <div className="w-full max-w-md bg-[#F6F2EC] rounded-t-3xl flex flex-col max-h-[92vh]">
+        <div className="w-full max-w-md bg-[#F6F2EC] rounded-t-3xl flex flex-col max-h-[92dvh]">
 
           {/* Header */}
           <div className="flex items-center justify-between px-5 pt-5 pb-2 flex-shrink-0">
