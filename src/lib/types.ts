@@ -58,6 +58,7 @@ export interface HealthEventVisit {
   status: 'open' | 'active' | 'closed'
   severity: number
   note: string | null
+  photo_urls: string[] | null    // URLs signées Supabase Storage (bucket bobo-photos)
   created_at: string
 }
 
