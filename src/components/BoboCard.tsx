@@ -338,7 +338,7 @@ export default function BoboCard({
                   type="button"
                   onClick={() => handleSaveVisit('active')}
                   disabled={submittingVisit}
-                  className="flex-1 bg-primary text-white font-bold text-xs py-2.5 rounded-xl shadow-xs active:scale-[0.98] transition-transform cursor-pointer disabled:opacity-50"
+                  className="flex-1 bg-amber-500 text-white font-bold text-xs py-2.5 rounded-xl shadow-xs active:scale-[0.98] transition-transform cursor-pointer disabled:opacity-50"
                 >
                   Enregistrer · En cours
                 </button>
