@@ -61,6 +61,12 @@ export interface HealthEventVisit {
   created_at: string
 }
 
+export interface FarmAlert {
+  key: string
+  active: boolean
+  updated_at: string
+}
+
 export interface Pathology {
   id: string
   category: string
