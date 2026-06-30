@@ -217,3 +217,235 @@ export function VisitModal({
                   multiple
                   onChange={e => {
                     const files = Array.from(e.target.files ?? [])
+                    setPhotos(prev => [...prev, ...files])
+                    e.target.value = ''
+                  }}
+                  className="hidden"
+                />
+              </label>
+            </div>
+          </div>
+
+          {error && (
+            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              {error}
+            </p>
+          )}
+
+          <div className="flex gap-2.5 pt-2">
+            <button
+              type="button"
+              onClick={() => handleSave('active')}
+              disabled={submitting}
+              className="flex-1 bg-amber-500 text-white font-bold text-xs py-2.5 rounded-xl shadow-xs active:scale-[0.98] transition-transform cursor-pointer disabled:opacity-50"
+            >
+              {submitting ? 'Enregistrement…' : 'Enregistrer · En cours'}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSave('closed')}
+              disabled={submitting}
+              className="flex-1 bg-green-600 text-white font-bold text-xs py-2.5 rounded-xl shadow-xs active:scale-[0.98] transition-transform cursor-pointer disabled:opacity-50"
+            >
+              {submitting ? '…' : 'Enregistrer · Résolu'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── BoboCard ────────────────────────────────────────────────────────────────
+interface BoboCardProps {
+  event: HealthEvent
+  horse: Horse | null
+  pathology: Pathology | null
+  showHorseBadge?: boolean
+  onUpdated: () => void
+}
+
+export default function BoboCard({
+  event,
+  horse,
+  pathology,
+  showHorseBadge = true,
+  onUpdated,
+}: BoboCardProps) {
+  const [showVisits, setShowVisits] = useState(false)
+  const [visits, setVisits] = useState<HealthEventVisit[]>([])
+  const [showModifyModal, setShowModifyModal] = useState(false)
+  const [ficheOuverte, setFicheOuverte] = useState(false)
+
+  const horseColor = horse?.color_hex ?? (horse ? HORSE_COLORS[horse.name] : null) ?? '#2f6b3f'
+  const titre = getBoboTitle(event, pathology)
+  const sousTitre = pathology && event.location ? event.location : null
+
+  async function fetchVisits() {
+    try {
+      const { data, error } = await supabase
+        .from('health_event_visits')
+        .select('*')
+        .eq('health_event_id', event.id)
+        .order('visited_at', { ascending: false })
+      if (!error && data) {
+        setVisits(data)
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  useEffect(() => {
+    fetchVisits()
+  }, [event.id])
+
+  const totalEntries = visits.length + (event.note ? 1 : 0)
+  const hasInitialEntry = !!event.note
+  const currentSeverity = visits.length > 0 ? visits[0].severity : event.severity
+
+  return (
+    <div className="bg-white rounded-xl p-4 shadow-xs space-y-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          {showHorseBadge && horse && (
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <span
+                className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white"
+                style={{ backgroundColor: horseColor }}
+              >
+                {horse.name}
+              </span>
+            </div>
+          )}
+          <h3 className="text-sm font-bold text-gray-800 leading-tight">{titre}</h3>
+          {sousTitre && <p className="text-xs text-gray-400 mt-0.5">{sousTitre}</p>}
+        </div>
+
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {pathology && (
+            <button
+              type="button"
+              onClick={() => setFicheOuverte(true)}
+              className="text-primary/50 hover:text-primary cursor-pointer transition-colors p-1"
+              title={`Fiche : ${pathology.name}`}
+            >
+              <Info className="w-4 h-4" />
+            </button>
+          )}
+          <StatusBadge status={event.status} />
+        </div>
+      </div>
+
+      {event.photo_urls && event.photo_urls.length > 0 && (
+        <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
+          {event.photo_urls.map((url, idx) => (
+            <img
+              key={idx}
+              src={url}
+              alt={`Photo ${idx + 1}`}
+              className="w-14 h-14 rounded-lg object-cover flex-shrink-0"
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Barre d'action basse de la carte */}
+      <div className="flex items-center justify-between pt-2.5 border-t border-gray-100 text-xs">
+        <div className="flex flex-col gap-0.5">
+          <Stars count={event.severity} />
+          <span className="text-[9px] text-gray-400 flex items-center gap-1">
+            <Calendar className="w-2.5 h-2.5" />
+            {formatDateTime(event.opened_at)}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {totalEntries > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowVisits(!showVisits)}
+              className="text-[10px] font-bold text-gray-500 hover:text-gray-700 flex items-center gap-1 cursor-pointer"
+            >
+              Journal ({totalEntries})
+              {showVisits ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setShowModifyModal(true)}
+            className="text-[10px] font-bold text-primary uppercase tracking-wider flex items-center gap-1 hover:underline cursor-pointer"
+          >
+            <Plus className="w-3 h-3" />
+            Suivi
+          </button>
+        </div>
+      </div>
+
+      {/* Journal des visites dépliant */}
+      {showVisits && totalEntries > 0 && (
+        <div className="mt-3 pt-3 border-t border-gray-100/70 space-y-2 max-h-60 overflow-y-auto no-scrollbar">
+          {/* Vraies visites (récentes d'abord) */}
+          {visits.map(v => (
+            <div key={v.id} className="text-xs bg-gray-50 rounded-lg p-2.5 space-y-1">
+              <div className="flex justify-between items-center text-[9px] text-gray-400">
+                <span>{formatDateTime(v.visited_at)}</span>
+                <div className="flex items-center gap-1.5">
+                  <Stars count={v.severity} />
+                  <StatusBadge status={v.status} />
+                </div>
+              </div>
+              {v.note && <p className="text-gray-700 leading-normal">{v.note}</p>}
+              {v.photo_urls && v.photo_urls.length > 0 && (
+                <div className="flex gap-1.5 overflow-x-auto no-scrollbar pt-1">
+                  {v.photo_urls.map((url, idx) => (
+                    <img
+                      key={idx}
+                      src={url}
+                      alt={`Photo visite ${idx + 1}`}
+                      className="w-12 h-12 rounded-md object-cover flex-shrink-0"
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+
+          {/* Entrée virtuelle initiale (la plus ancienne) */}
+          {hasInitialEntry && (
+            <div className="text-xs bg-gray-50/50 rounded-lg p-2.5 space-y-1 border border-dashed border-gray-200">
+              <div className="flex justify-between items-center text-[9px] text-gray-400">
+                <span className="font-semibold text-primary/70">Ouverture du bobo</span>
+                <span>{formatDateTime(event.opened_at)}</span>
+              </div>
+              <div className="flex justify-between items-center text-[9px] text-gray-400">
+                <span className="italic">Note initiale</span>
+                <div className="flex items-center gap-1.5">
+                  <Stars count={event.severity} />
+                  <StatusBadge status="open" />
+                </div>
+              </div>
+              <p className="text-gray-600 leading-normal italic">{event.note}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Fiche Pathologie Modale */}
+      {ficheOuverte && pathology && (
+        <FichePathologie pathology={pathology} onClose={() => setFicheOuverte(false)} />
+      )}
+
+      {/* Modale de modification / suivi — délégué à VisitModal */}
+      {showModifyModal && (
+        <VisitModal
+          event={event}
+          currentSeverity={currentSeverity}
+          onClose={() => setShowModifyModal(false)}
+          onSaved={() => { fetchVisits(); onUpdated() }}
+        />
+      )}
+    </div>
+  )
+}
