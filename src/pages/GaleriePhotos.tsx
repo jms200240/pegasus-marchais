@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { AmbiancePhoto, Horse, PhotoTag } from '../lib/types'
 import { CANONICAL_ORDER, HORSE_COLORS, formatDateTime } from '../lib/types'
-import { Image as ImageIcon, X, Share2, Download, Plus, Tag } from 'lucide-react'
+import { Image as ImageIcon, X, Share2, Download, Plus, Tag, Filter, ChevronLeft } from 'lucide-react'
 // @ts-ignore — piexifjs n'a pas de types officiels à jour pour cette API, @types/piexifjs couvre l'essentiel
 import piexif from 'piexifjs'
 
@@ -173,6 +173,144 @@ function TagPicker({
           </button>
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── Écran de filtre par tags (nuage de mots) ──────────────────────────────
+interface TagFreq {
+  key: string        // `${tagType}:${label}`
+  label: string
+  tagType: 'horse' | 'human'
+  count: number
+}
+
+function TagFilterScreen({
+  tags,
+  selected,
+  onToggle,
+  onClear,
+  onClose,
+  resultCount,
+}: {
+  tags: TagFreq[]
+  selected: Set<string>
+  onToggle: (key: string) => void
+  onClear: () => void
+  onClose: () => void
+  resultCount: number
+}) {
+  const maxCount = Math.max(1, ...tags.map(t => t.count))
+  const horseTags = tags.filter(t => t.tagType === 'horse')
+  const humanTags = tags.filter(t => t.tagType === 'human')
+
+  function sizeClass(count: number) {
+    const ratio = count / maxCount
+    if (ratio > 0.66) return 'text-lg font-black'
+    if (ratio > 0.33) return 'text-sm font-bold'
+    return 'text-xs font-semibold'
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex justify-center bg-black/5">
+      <div className="w-full max-w-[390px] bg-[#F6F2EC] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 pt-5 pb-3 flex-shrink-0 border-b border-gray-200/60 bg-white/70 backdrop-blur-sm">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex items-center gap-1 text-sm font-bold text-gray-500 cursor-pointer"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            Retour
+          </button>
+          <h2 className="text-sm font-black text-gray-900">Filtrer par tag</h2>
+          <div className="w-14" />
+        </div>
+
+        <div className="flex-1 overflow-y-auto no-scrollbar px-5 pt-4 pb-4 space-y-5">
+          {tags.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-8">
+              Aucun tag pour l'instant — taguez des photos pour les retrouver ici.
+            </p>
+          ) : (
+            <>
+              {horseTags.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
+                    Chevaux
+                  </p>
+                  <div className="flex flex-wrap gap-x-2 gap-y-2.5 leading-loose">
+                    {horseTags.map(t => {
+                      const isSel = selected.has(t.key)
+                      return (
+                        <button
+                          key={t.key}
+                          type="button"
+                          onClick={() => onToggle(t.key)}
+                          className={`${sizeClass(t.count)} cursor-pointer px-2 py-0.5 rounded-lg transition-all ${
+                            isSel
+                              ? 'bg-primary text-white shadow-sm'
+                              : 'text-gray-700 bg-white hover:bg-primary/10 hover:text-primary'
+                          }`}
+                        >
+                          {t.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {humanTags.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
+                    Humains
+                  </p>
+                  <div className="flex flex-wrap gap-x-2 gap-y-2.5 leading-loose">
+                    {humanTags.map(t => {
+                      const isSel = selected.has(t.key)
+                      return (
+                        <button
+                          key={t.key}
+                          type="button"
+                          onClick={() => onToggle(t.key)}
+                          className={`${sizeClass(t.count)} cursor-pointer px-2 py-0.5 rounded-lg transition-all ${
+                            isSel
+                              ? 'bg-gray-700 text-white shadow-sm'
+                              : 'text-gray-700 bg-white hover:bg-gray-200'
+                          }`}
+                        >
+                          {t.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Barre du bas */}
+        <div className="flex items-center gap-2 px-5 py-4 border-t border-gray-200/60 bg-white/70 flex-shrink-0 backdrop-blur-sm">
+          <button
+            type="button"
+            onClick={onClear}
+            disabled={selected.size === 0}
+            className="text-sm font-bold text-gray-400 px-3 py-2.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Tout effacer
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 bg-primary text-white font-bold text-sm py-2.5 rounded-xl shadow-sm active:scale-[0.98] transition-transform cursor-pointer"
+          >
+            Voir les photos ({resultCount})
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -446,6 +584,44 @@ export default function GaleriePhotos() {
   const [error, setError] = useState<string | null>(null)
   const [selectedPhoto, setSelectedPhoto] = useState<AmbiancePhoto | null>(null)
 
+  // ── Filtre par tags ───────────────────────────────────────────────────────
+  const [showFilter, setShowFilter] = useState(false)
+  const [tagFreqs, setTagFreqs] = useState<TagFreq[]>([])
+  const [photoTagKeys, setPhotoTagKeys] = useState<Record<string, Set<string>>>({})
+  const [selectedFilterKeys, setSelectedFilterKeys] = useState<Set<string>>(new Set())
+
+  async function fetchAllTags() {
+    const { data } = await supabase.from('photo_tags').select('photo_id, tag_type, label')
+    if (!data) return
+
+    const freqMap = new Map<string, TagFreq>()
+    const byPhoto: Record<string, Set<string>> = {}
+
+    for (const row of data as { photo_id: string; tag_type: 'horse' | 'human'; label: string }[]) {
+      const key = `${row.tag_type}:${row.label}`
+      const existing = freqMap.get(key)
+      if (existing) {
+        existing.count += 1
+      } else {
+        freqMap.set(key, { key, label: row.label, tagType: row.tag_type, count: 1 })
+      }
+      if (!byPhoto[row.photo_id]) byPhoto[row.photo_id] = new Set()
+      byPhoto[row.photo_id].add(key)
+    }
+
+    setTagFreqs([...freqMap.values()].sort((a, b) => b.count - a.count))
+    setPhotoTagKeys(byPhoto)
+  }
+
+  function toggleFilterKey(key: string) {
+    setSelectedFilterKeys(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
   useEffect(() => {
     async function fetchAll() {
       setLoading(true)
@@ -476,10 +652,22 @@ export default function GaleriePhotos() {
       }
     }
     fetchAll()
+    fetchAllTags()
   }, [])
 
+  const filteredPhotos = selectedFilterKeys.size === 0
+    ? photos
+    : photos.filter(p => {
+        const keys = photoTagKeys[p.id]
+        if (!keys) return false
+        for (const k of selectedFilterKeys) {
+          if (keys.has(k)) return true
+        }
+        return false
+      })
+
   const grouped: { dateLabel: string; items: AmbiancePhoto[] }[] = []
-  for (const photo of photos) {
+  for (const photo of filteredPhotos) {
     const dateLabel = new Date(photo.visited_at).toLocaleDateString('fr-FR', {
       day: '2-digit',
       month: 'long',
@@ -496,9 +684,23 @@ export default function GaleriePhotos() {
   return (
     <>
       <div className="flex-1 flex flex-col">
-        <div className="px-5 pt-5 pb-3">
-          <h1 className="text-2xl font-bold text-gray-900 leading-tight">Galerie</h1>
-          <p className="text-xs text-gray-500 mt-0.5">Photos d'ambiance — Élevage Scalbert</p>
+        <div className="px-5 pt-5 pb-3 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 leading-tight">Galerie</h1>
+            <p className="text-xs text-gray-500 mt-0.5">Photos d'ambiance — Élevage Scalbert</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowFilter(true)}
+            className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-full cursor-pointer transition-colors flex-shrink-0 ${
+              selectedFilterKeys.size > 0
+                ? 'bg-primary text-white'
+                : 'bg-white text-gray-600 border border-gray-200'
+            }`}
+          >
+            <Filter className="w-3.5 h-3.5" />
+            Filtre{selectedFilterKeys.size > 0 ? ` (${selectedFilterKeys.size})` : ''}
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto no-scrollbar px-4 pb-6">
@@ -509,12 +711,16 @@ export default function GaleriePhotos() {
               <p className="font-semibold mb-1">Impossible de charger les photos</p>
               <p className="text-xs font-mono">{error}</p>
             </div>
-          ) : photos.length === 0 ? (
+          ) : filteredPhotos.length === 0 ? (
             <div className="bg-white rounded-xl p-6 shadow-xs text-center mt-4">
               <ImageIcon className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-              <p className="text-sm font-semibold text-gray-700">Aucune photo pour l'instant</p>
+              <p className="text-sm font-semibold text-gray-700">
+                {photos.length === 0 ? "Aucune photo pour l'instant" : 'Aucune photo pour ce filtre'}
+              </p>
               <p className="text-xs text-gray-400 mt-0.5">
-                Ajoutez des photos d'ambiance depuis "Démarrer une visite".
+                {photos.length === 0
+                  ? 'Ajoutez des photos d\'ambiance depuis "Démarrer une visite".'
+                  : 'Essayez un autre tag, ou effacez le filtre.'}
               </p>
             </div>
           ) : (
@@ -553,6 +759,28 @@ export default function GaleriePhotos() {
           horses={horses}
           users={users}
           onClose={() => setSelectedPhoto(null)}
+        />
+      )}
+
+      {showFilter && (
+        <TagFilterScreen
+          tags={tagFreqs}
+          selected={selectedFilterKeys}
+          onToggle={toggleFilterKey}
+          onClear={() => setSelectedFilterKeys(new Set())}
+          onClose={() => setShowFilter(false)}
+          resultCount={
+            selectedFilterKeys.size === 0
+              ? photos.length
+              : photos.filter(p => {
+                  const keys = photoTagKeys[p.id]
+                  if (!keys) return false
+                  for (const k of selectedFilterKeys) {
+                    if (keys.has(k)) return true
+                  }
+                  return false
+                }).length
+          }
         />
       )}
     </>
