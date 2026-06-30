@@ -191,14 +191,12 @@ function TagFilterScreen({
   onToggle,
   onClear,
   onClose,
-  resultCount,
 }: {
   tags: TagFreq[]
   selected: Set<string>
   onToggle: (key: string) => void
   onClear: () => void
   onClose: () => void
-  resultCount: number
 }) {
   const maxCount = Math.max(1, ...tags.map(t => t.count))
   const horseTags = tags.filter(t => t.tagType === 'horse')
@@ -288,12 +286,22 @@ function TagFilterScreen({
                   </div>
                 </div>
               )}
+
+              {selected.size > 0 && (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="w-full bg-primary text-white font-bold text-sm py-2.5 rounded-xl shadow-sm active:scale-[0.98] transition-transform cursor-pointer"
+                >
+                  Photos triées
+                </button>
+              )}
             </>
           )}
         </div>
 
         {/* Barre du bas */}
-        <div className="flex items-center gap-2 px-5 py-4 border-t border-gray-200/60 bg-white/70 flex-shrink-0 backdrop-blur-sm">
+        <div className="flex items-center justify-center px-5 py-4 border-t border-gray-200/60 bg-white/70 flex-shrink-0 backdrop-blur-sm">
           <button
             type="button"
             onClick={onClear}
@@ -301,13 +309,6 @@ function TagFilterScreen({
             className="text-sm font-bold text-gray-400 px-3 py-2.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Tout effacer
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 bg-primary text-white font-bold text-sm py-2.5 rounded-xl shadow-sm active:scale-[0.98] transition-transform cursor-pointer"
-          >
-            Voir les photos ({resultCount})
           </button>
         </div>
       </div>
@@ -661,9 +662,9 @@ export default function GaleriePhotos() {
         const keys = photoTagKeys[p.id]
         if (!keys) return false
         for (const k of selectedFilterKeys) {
-          if (keys.has(k)) return true
+          if (!keys.has(k)) return false
         }
-        return false
+        return true
       })
 
   const grouped: { dateLabel: string; items: AmbiancePhoto[] }[] = []
@@ -689,18 +690,29 @@ export default function GaleriePhotos() {
             <h1 className="text-2xl font-bold text-gray-900 leading-tight">Galerie</h1>
             <p className="text-xs text-gray-500 mt-0.5">Photos d'ambiance — Élevage Scalbert</p>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowFilter(true)}
-            className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-full cursor-pointer transition-colors flex-shrink-0 ${
-              selectedFilterKeys.size > 0
-                ? 'bg-primary text-white'
-                : 'bg-white text-gray-600 border border-gray-200'
-            }`}
-          >
-            <Filter className="w-3.5 h-3.5" />
-            Filtre{selectedFilterKeys.size > 0 ? ` (${selectedFilterKeys.size})` : ''}
-          </button>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {selectedFilterKeys.size > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelectedFilterKeys(new Set())}
+                className="text-xs font-bold px-3 py-2 rounded-full cursor-pointer text-gray-500 hover:text-gray-700"
+              >
+                Effacer les filtres
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowFilter(true)}
+              className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-full cursor-pointer transition-colors flex-shrink-0 ${
+                selectedFilterKeys.size > 0
+                  ? 'bg-primary text-white'
+                  : 'bg-white text-gray-600 border border-gray-200'
+              }`}
+            >
+              <Filter className="w-3.5 h-3.5" />
+              Filtre{selectedFilterKeys.size > 0 ? ` (${selectedFilterKeys.size})` : ''}
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto no-scrollbar px-4 pb-6">
@@ -769,18 +781,6 @@ export default function GaleriePhotos() {
           onToggle={toggleFilterKey}
           onClear={() => setSelectedFilterKeys(new Set())}
           onClose={() => setShowFilter(false)}
-          resultCount={
-            selectedFilterKeys.size === 0
-              ? photos.length
-              : photos.filter(p => {
-                  const keys = photoTagKeys[p.id]
-                  if (!keys) return false
-                  for (const k of selectedFilterKeys) {
-                    if (keys.has(k)) return true
-                  }
-                  return false
-                }).length
-          }
         />
       )}
     </>
