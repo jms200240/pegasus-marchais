@@ -39,6 +39,7 @@ export interface HealthEvent {
   status: 'open' | 'active' | 'closed'
   opened_at: string              // ISO timestamp — horodatage terrain éditable
   created_at: string
+  photo_urls: string[] | null    // URLs signées Supabase Storage (bucket bobo-photos)
 }
 
 // Ordre canonique des chevaux actifs (codé en dur, côté frontend)
