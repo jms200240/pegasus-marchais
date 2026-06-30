@@ -41,7 +41,7 @@ export function FichePathologie({
         {pathology.prevention && <Section titre="Prévention" texte={pathology.prevention} />}
 
         {pathology.source_url && (
-          <a
+          
             href={pathology.source_url}
             target="_blank"
             rel="noopener noreferrer"
@@ -721,7 +721,8 @@ export default function BoboWizard({ horses, onCreated, onClose }: BoboWizardPro
   return (
     <>
       {/* Overlay plein écran */}
-      <div className="fixed inset-0 z-[60] bg-[#F6F2EC] flex flex-col">
+      <div className="fixed inset-0 z-[60] flex justify-center bg-black/5">
+      <div className="w-full max-w-[390px] bg-[#F6F2EC] flex flex-col">
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-2 flex-shrink-0">
@@ -792,6 +793,7 @@ export default function BoboWizard({ horses, onCreated, onClose }: BoboWizardPro
               {saving ? 'Enregistrement…' : isLastStep ? 'Enregistrer le bobo' : 'Suivant →'}
             </button>
           </div>
+      </div>
       </div>
 
       {/* Fiche pathologie post-enregistrement */}
