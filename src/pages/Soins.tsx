@@ -150,8 +150,8 @@ function NewBoboForm({
       resetForm()
       setOpen(false)
       onCreated()
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Erreur lors de la création')
+    } catch (err: any) {
+      setError(err?.message ?? err?.error_description ?? JSON.stringify(err))
     } finally {
       setSaving(false)
     }
