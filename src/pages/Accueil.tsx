@@ -127,13 +127,13 @@ export default function Accueil() {
                   {foinActif && (
                     <div className="flex items-center gap-2.5 px-4 py-3 bg-amber-50 border border-amber-300 rounded-xl">
                       <Wheat className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                      <p className="text-xs font-bold text-amber-700">Alerte foin — stock à réapprovisionner</p>
+                      <p className="text-xs font-bold text-amber-700">Alerte foin — commander une botte</p>
                     </div>
                   )}
                   {eauActive && (
                     <div className="flex items-center gap-2.5 px-4 py-3 bg-amber-50 border border-amber-300 rounded-xl">
                       <Droplets className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                      <p className="text-xs font-bold text-amber-700">Alerte eau — vérifier l'abreuvement</p>
+                      <p className="text-xs font-bold text-amber-700">Alerte eau — vérifier la bassine</p>
                     </div>
                   )}
                 </div>
