@@ -250,7 +250,8 @@ export default function VisiteSheet({ onClose }: VisiteSheetProps) {
   // ─── Rendu ────────────────────────────────────────────────────────────────
   return (
     <>
-      <div className="fixed inset-0 z-[60] bg-[#F6F2EC] flex flex-col">
+      <div className="fixed inset-0 z-[60] flex justify-center bg-black/5">
+      <div className="w-full max-w-[390px] bg-[#F6F2EC] flex flex-col">
 
         {/* ── Header ── */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3 flex-shrink-0 border-b border-gray-200/60 bg-white/70 backdrop-blur-sm">
@@ -479,6 +480,7 @@ export default function VisiteSheet({ onClose }: VisiteSheetProps) {
             </button>
           </section>
         </div>
+      </div>
       </div>
 
       {/* ── BoboWizard ── */}
