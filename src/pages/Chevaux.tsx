@@ -95,9 +95,9 @@ function HorseCard({
           </div>
           <div className={`text-xs mt-0.5 ${subtextColor}`}>
             {horse.race ?? 'Race inconnue'}
-            {horse.birth_date && (
+            {horse.born_at && (
               <span className="ml-2 opacity-70">
-                · {new Date().getFullYear() - new Date(horse.birth_date).getFullYear()} ans
+                · {new Date().getFullYear() - new Date(horse.born_at).getFullYear()} ans
               </span>
             )}
           </div>
