@@ -68,6 +68,13 @@ export interface FarmAlert {
   updated_at: string
 }
 
+export interface AmbiancePhoto {
+  id: string
+  visited_at: string
+  photo_url: string
+  created_at: string
+}
+
 export interface Pathology {
   id: string
   category: string
