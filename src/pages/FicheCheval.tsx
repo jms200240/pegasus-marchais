@@ -208,7 +208,7 @@ export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChe
 
         {/* Lien IFCE */}
         {horse.ifce_url && (
-          
+          <a
             href={horse.ifce_url}
             target="_blank"
             rel="noopener noreferrer"

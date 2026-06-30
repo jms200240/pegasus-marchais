@@ -37,4 +37,55 @@ export interface HealthEvent {
   note: string | null
   severity: number               // 1 à 5 étoiles
   status: 'open' | 'active' | 'closed'
-  opened_at: string
+  opened_at: string              // ISO timestamp — horodatage terrain éditable
+  created_at: string
+}
+
+// Ordre canonique des chevaux actifs (codé en dur, côté frontend)
+export const CANONICAL_ORDER = [
+  'Échalote',
+  'Hakéa',
+  'Romarin',
+  'Cerise',
+  'Fraise',
+  'Pistache',
+  'Pamplemousse',
+] as const
+
+// Couleurs officielles de la charte par cheval
+export const HORSE_COLORS: Record<string, string> = {
+  'Échalote':     '#C0392B',
+  'Hakéa':        '#27AE60',
+  'Romarin':      '#1A1A1A',
+  'Cerise':       '#8B1A2A',
+  'Fraise':       '#1A3A6B',
+  'Pistache':     '#82C341',
+  'Pamplemousse': '#E88080',
+}
+
+// Utilitaire : un bobo est actif si status != 'closed'
+export function isBobosActif(events: HealthEvent[]): boolean {
+  return events.some(e => e.status !== 'closed')
+}
+
+// Utilitaire : formater une date ISO en format lisible FR
+export function formatDate(iso: string | null): string {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  })
+}
+
+// Utilitaire : formater un timestamp en date + heure FR
+export function formatDateTime(iso: string | null): string {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
