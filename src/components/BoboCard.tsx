@@ -356,8 +356,19 @@ export default function BoboCard({
           <Stars count={event.severity} />
           <span className="text-[9px] text-gray-400 flex items-center gap-1">
             <Calendar className="w-2.5 h-2.5" />
-            {formatDateTime(event.opened_at)}
+            Début : {formatDateTime(event.opened_at)}
           </span>
+          {event.status === 'closed' ? (
+            <span className="text-[9px] text-gray-400 flex items-center gap-1">
+              <Calendar className="w-2.5 h-2.5" />
+              Clôturé le : {formatDateTime(event.closed_at)}
+            </span>
+          ) : (
+            <span className="text-[9px] text-gray-400 flex items-center gap-1">
+              <Calendar className="w-2.5 h-2.5" />
+              Dernier suivi : {visits.length > 0 ? formatDateTime(visits[0].visited_at) : 'Aucun'}
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-3">
