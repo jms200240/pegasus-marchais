@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Horse, HealthEvent, Pathology } from '../lib/types'
-import { HORSE_COLORS, formatDateTime } from '../lib/types'
-import { AlertCircle, CheckCircle, Clock, Plus, Info } from 'lucide-react'
-import BoboWizard, { FichePathologie } from '../components/BoboWizard'
+import { Plus, CheckCircle } from 'lucide-react'
+import BoboWizard from '../components/BoboWizard'
+import BoboCard from '../components/BoboCard'
 
 // ─── Spinner inline ─────────────────────────────────────────────────────────
 function Spinner() {
@@ -17,32 +17,6 @@ function Spinner() {
   )
 }
 
-// ─── Étoiles gravité (lecture seule) ────────────────────────────────────────
-function Stars({ count }: { count: number }) {
-  return (
-    <span className="text-amber-400 text-xs leading-none">
-      {'★'.repeat(Math.min(count, 5))}
-      <span className="text-gray-200">{'★'.repeat(Math.max(0, 5 - count))}</span>
-    </span>
-  )
-}
-
-// ─── Badge statut ────────────────────────────────────────────────────────────
-function StatusBadge({ status }: { status: string }) {
-  if (status === 'closed') {
-    return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
-        <CheckCircle className="w-2.5 h-2.5" />Résolu
-      </span>
-    )
-  }
-  return (
-    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">
-      <AlertCircle className="w-2.5 h-2.5" />Actif
-    </span>
-  )
-}
-
 // ─── Page principale ─────────────────────────────────────────────────────────
 export default function Soins() {
   const [horses, setHorses] = useState<Horse[]>([])
@@ -51,7 +25,6 @@ export default function Soins() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [wizardOpen, setWizardOpen] = useState(false)
-  const [ficheOuverte, setFicheOuverte] = useState<Pathology | null>(null)
 
   async function fetchData() {
     setLoading(true)
@@ -81,14 +54,6 @@ export default function Soins() {
   }
 
   useEffect(() => { fetchData() }, [])
-
-  async function markResolved(eventId: string) {
-    const { error: updateErr } = await supabase
-      .from('health_events')
-      .update({ status: 'closed' })
-      .eq('id', eventId)
-    if (!updateErr) fetchData()
-  }
 
   const horseById  = (id: string)        => horses.find(h => h.id === id) ?? null
   const pathById   = (id: string | null) => id ? pathologies.find(p => p.id === id) ?? null : null
@@ -155,88 +120,15 @@ export default function Soins() {
             </div>
           ) : (
             <div className="space-y-2 mb-6">
-              {activeEvents.map(event => {
-                const horse     = horseById(event.horse_id)
-                const color     = horse?.color_hex ?? (horse ? HORSE_COLORS[horse.name] : null) ?? '#2f6b3f'
-                const pathology = pathById(event.pathology_id)
-
-                // Priorité titre : note → pathology.name → location → fallback
-                const titre = event.note
-                  ? event.note
-                  : pathology
-                  ? pathology.name
-                  : event.location
-                  ? event.location
-                  : 'Bobo signalé'
-
-                // Sous-titre localisation si pathologie connue
-                const sousTitre = pathology && event.location ? event.location : null
-
-                return (
-                  <div key={event.id} className="bg-white rounded-xl p-4 shadow-xs">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <span
-                            className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white"
-                            style={{ backgroundColor: color }}
-                          >
-                            {horse?.name ?? 'Cheval inconnu'}
-                          </span>
-                        </div>
-                        <p className="text-sm font-bold text-gray-800 leading-tight">{titre}</p>
-                        {sousTitre && (
-                          <p className="text-xs text-gray-400 mt-0.5">{sousTitre}</p>
-                        )}
-                      </div>
-
-                      {/* Icône Info + badge statut */}
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        {pathology && (
-                          <button
-                            type="button"
-                            onClick={() => setFicheOuverte(pathology)}
-                            className="text-primary/50 hover:text-primary cursor-pointer transition-colors"
-                            title={`Fiche : ${pathology.name}`}
-                          >
-                            <Info className="w-4 h-4" />
-                          </button>
-                        )}
-                        <StatusBadge status={event.status} />
-                      </div>
-                    </div>
-
-                    {event.photo_urls && event.photo_urls.length > 0 && (
-                      <div className="flex gap-1.5 mt-2.5 overflow-x-auto no-scrollbar">
-                        {event.photo_urls.map((url, idx) => (
-                          <img
-                            key={idx}
-                            src={url}
-                            alt={`Photo ${idx + 1}`}
-                            className="w-14 h-14 rounded-lg object-cover flex-shrink-0"
-                          />
-                        ))}
-                      </div>
-                    )}
-
-                    <div className="flex items-center justify-between mt-3 pt-2 border-t border-gray-100">
-                      <Stars count={event.severity} />
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-1 text-[10px] text-gray-400">
-                          <Clock className="w-2.5 h-2.5" />
-                          {formatDateTime(event.opened_at)}
-                        </div>
-                        <button
-                          onClick={() => markResolved(event.id)}
-                          className="text-[10px] font-bold text-primary uppercase tracking-wider cursor-pointer hover:underline"
-                        >
-                          Marquer résolu
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
+              {activeEvents.map(event => (
+                <BoboCard
+                  key={event.id}
+                  event={event}
+                  horse={horseById(event.horse_id)}
+                  pathology={pathById(event.pathology_id)}
+                  onUpdated={fetchData}
+                />
+              ))}
             </div>
           )}
 
@@ -250,38 +142,16 @@ export default function Soins() {
                 </span>
                 <span className="text-xs text-gray-400">({resolvedEvents.length})</span>
               </div>
-              <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-                {resolvedEvents.map((event, idx) => {
-                  const horse     = horseById(event.horse_id)
-                  const pathology = pathById(event.pathology_id)
-
-                  const titre = event.note
-                    ? event.note
-                    : pathology
-                    ? pathology.name
-                    : event.location
-                    ? event.location
-                    : 'Bobo signalé'
-
-                  return (
-                    <div
-                      key={event.id}
-                      className={`flex items-center gap-3 px-4 py-3 ${
-                        idx < resolvedEvents.length - 1 ? 'border-b border-gray-100' : ''
-                      }`}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <span className="text-sm font-semibold text-gray-600 truncate block">
-                          {titre}
-                        </span>
-                        <span className="text-xs text-gray-400">
-                          {horse?.name ?? 'Cheval inconnu'} · {formatDateTime(event.opened_at)}
-                        </span>
-                      </div>
-                      <StatusBadge status={event.status} />
-                    </div>
-                  )
-                })}
+              <div className="space-y-2">
+                {resolvedEvents.map(event => (
+                  <BoboCard
+                    key={event.id}
+                    event={event}
+                    horse={horseById(event.horse_id)}
+                    pathology={pathById(event.pathology_id)}
+                    onUpdated={fetchData}
+                  />
+                ))}
               </div>
             </>
           )}
@@ -294,14 +164,6 @@ export default function Soins() {
           horses={activeHorses}
           onCreated={fetchData}
           onClose={() => setWizardOpen(false)}
-        />
-      )}
-
-      {/* ── Fiche pathologie via bouton Info ── */}
-      {ficheOuverte && (
-        <FichePathologie
-          pathology={ficheOuverte}
-          onClose={() => setFicheOuverte(null)}
         />
       )}
     </>

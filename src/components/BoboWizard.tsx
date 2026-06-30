@@ -73,7 +73,7 @@ function Section({ titre, texte }: { titre: string; texte: string }) {
 }
 
 // ─── StarPicker ──────────────────────────────────────────────────────────
-function StarPicker({ value, onChange }: { value: number; onChange: (n: number) => void }) {
+export function StarPicker({ value, onChange }: { value: number; onChange: (n: number) => void }) {
   return (
     <div className="flex gap-2">
       {[1, 2, 3, 4, 5].map(i => (

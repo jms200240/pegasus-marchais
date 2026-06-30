@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import type { Horse, Genealogy, HealthEvent } from '../lib/types'
-import { HORSE_COLORS, formatDate, formatDateTime } from '../lib/types'
+import type { Horse, Genealogy, HealthEvent, Pathology } from '../lib/types'
+import { HORSE_COLORS, formatDate } from '../lib/types'
 import {
   ArrowLeft, ExternalLink, Calendar, Award,
-  AlertCircle, CheckCircle, Clock, User
+  AlertCircle, CheckCircle, User
 } from 'lucide-react'
+import BoboCard from '../components/BoboCard'
 
 interface FicheChevalProps {
   horseId: string
@@ -23,33 +24,7 @@ function Spinner({ color = 'text-white' }: { color?: string }) {
   )
 }
 
-// ─── Étoiles gravité ──────────────────────────────────────────────────
-function Stars({ count, size = 'sm' }: { count: number; size?: 'sm' | 'md' }) {
-  const cls = size === 'md' ? 'text-base' : 'text-xs'
-  return (
-    <span className={cls}>
-      {[1, 2, 3, 4, 5].map(i => (
-        <span key={i} className={i <= count ? 'text-amber-400' : 'text-gray-200'}>★</span>
-      ))}
-    </span>
-  )
-}
 
-// ─── Badge statut bobo ────────────────────────────────────────────────
-function StatusBadge({ status }: { status: string }) {
-  if (status === 'closed') {
-    return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
-        <CheckCircle className="w-2.5 h-2.5" />Résolu
-      </span>
-    )
-  }
-  return (
-    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">
-      <AlertCircle className="w-2.5 h-2.5" />Actif
-    </span>
-  )
-}
 
 // ─── Ligne d'identité ─────────────────────────────────────────────────
 function InfoRow({ label, value }: { label: string; value: string | null }) {
@@ -78,6 +53,7 @@ export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChe
   const [genealogy, setGenealogy] = useState<Genealogy | null>(null)
   const [healthEvents, setHealthEvents] = useState<HealthEvent[]>([])
   const [allHorses, setAllHorses] = useState<Pick<Horse, 'id' | 'name' | 'color_hex' | 'is_active'>[]>([])
+  const [pathologies, setPathologies] = useState<Pathology[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -90,22 +66,26 @@ export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChe
         const [{ data: horseData, error: horseErr },
                { data: geneData, error: geneErr },
                { data: eventsData, error: eventsErr },
-               { data: horsesAll, error: horsesAllErr }] = await Promise.all([
+               { data: horsesAll, error: horsesAllErr },
+               { data: pathoData, error: pathoErr }] = await Promise.all([
           supabase.from('horses').select('*').eq('id', horseId).single(),
           supabase.from('genealogy').select('*').eq('horse_id', horseId).maybeSingle(),
           supabase.from('health_events').select('*').eq('horse_id', horseId).order('opened_at', { ascending: false }),
           supabase.from('horses').select('id, name, color_hex, is_active'),
+          supabase.from('pathologies').select('*'),
         ])
 
         if (horseErr) throw horseErr
         if (geneErr) throw geneErr
         if (eventsErr) throw eventsErr
         if (horsesAllErr) throw horsesAllErr
+        if (pathoErr) throw pathoErr
 
         setHorse(horseData)
         setGenealogy(geneData ?? null)
         setHealthEvents(eventsData ?? [])
         setAllHorses(horsesAll ?? [])
+        setPathologies(pathoData ?? [])
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : 'Erreur inconnue')
       } finally {
@@ -115,6 +95,8 @@ export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChe
 
     fetchData()
   }, [horseId])
+
+  const pathById = (id: string | null) => id ? pathologies.find(p => p.id === id) ?? null : null
 
   // ─── Chargement ───────────────────────────────────────────────────
   if (loading) {
@@ -280,21 +262,23 @@ export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChe
         ) : (
           <div className="space-y-2">
             {healthEvents.map(event => (
-              <div key={event.id} className="bg-white rounded-xl p-4 shadow-xs">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-gray-800 leading-tight">{event.note ?? 'Événement médical'}</p>
-                  </div>
-                  <StatusBadge status={event.status} />
-                </div>
-                <div className="flex items-center justify-between mt-3 pt-2 border-t border-gray-100">
-                  <Stars count={event.severity} />
-                  <div className="flex items-center gap-1 text-[10px] text-gray-400">
-                    <Clock className="w-2.5 h-2.5" />
-                    {formatDateTime(event.opened_at)}
-                  </div>
-                </div>
-              </div>
+              <BoboCard
+                key={event.id}
+                event={event}
+                horse={horse}
+                pathology={pathById(event.pathology_id)}
+                showHorseBadge={false}
+                onUpdated={async () => {
+                  const { data, error } = await supabase
+                    .from('health_events')
+                    .select('*')
+                    .eq('horse_id', horseId)
+                    .order('opened_at', { ascending: false })
+                  if (!error && data) {
+                    setHealthEvents(data)
+                  }
+                }}
+              />
             ))}
           </div>
         )}
