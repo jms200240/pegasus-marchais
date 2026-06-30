@@ -14,7 +14,7 @@ export function FichePathologie({
   onClose: () => void
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 backdrop-blur-sm">
       <div className="w-full max-w-md bg-white rounded-t-3xl p-5 max-h-[85vh] overflow-y-auto no-scrollbar">
         <div className="flex items-start justify-between mb-4">
           <div className="flex-1 min-w-0 pr-3">
@@ -721,7 +721,7 @@ export default function BoboWizard({ horses, onCreated, onClose }: BoboWizardPro
   return (
     <>
       {/* Overlay plein écran */}
-      <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm flex items-end justify-center">
+      <div className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm flex items-end justify-center">
         <div className="w-full max-w-md bg-[#F6F2EC] rounded-t-3xl flex flex-col max-h-[92dvh]">
 
           {/* Header */}
