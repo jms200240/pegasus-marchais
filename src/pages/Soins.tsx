@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Horse, HealthEvent, Pathology } from '../lib/types'
-import { CANONICAL_ORDER, HORSE_COLORS, formatDateTime } from '../lib/types'
+import { HORSE_COLORS, formatDateTime } from '../lib/types'
 import { AlertCircle, CheckCircle, Clock, Plus, Info } from 'lucide-react'
 import BoboWizard, { FichePathologie } from '../components/BoboWizard'
 
