@@ -30,6 +30,26 @@ export interface Genealogy {
   pdm_name: string | null
 }
 
+export interface Pathology {
+  id: string
+  category: string
+  cat_letter: string | null
+  name: string
+  variants: string[] | null
+  location: string | null
+  has_laterality: boolean
+  default_severity: number | null
+  is_urgent: boolean
+  definition: string | null
+  signs: string | null
+  conduct: string | null
+  prevention: string | null
+  source_name: string | null
+  source_url: string | null
+  freq_score: number | null
+  created_at: string
+}
+
 export interface HealthEvent {
   id: string
   horse_id: string
