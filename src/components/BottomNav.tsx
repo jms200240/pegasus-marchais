@@ -1,4 +1,4 @@
-import { Home, Heart, DollarSign } from 'lucide-react'
+import { Home, Heart, DollarSign, Image } from 'lucide-react'
 
 // Custom horse icon matching the Pegasus logo and branding
 const HorseIcon = ({ className = 'w-5 h-5' }: { className?: string }) => (
@@ -8,7 +8,7 @@ const HorseIcon = ({ className = 'w-5 h-5' }: { className?: string }) => (
   </svg>
 )
 
-export type TabType = 'accueil' | 'soins' | 'chevaux' | 'finances'
+export type TabType = 'accueil' | 'soins' | 'chevaux' | 'galerie' | 'finances'
 
 interface BottomNavProps {
   activeTab: TabType
@@ -20,6 +20,7 @@ export default function BottomNav({ activeTab, setActiveTab }: BottomNavProps) {
     { id: 'accueil' as TabType, label: 'Accueil', icon: Home },
     { id: 'soins' as TabType, label: 'Soins', icon: Heart },
     { id: 'chevaux' as TabType, label: 'Chevaux', icon: HorseIcon },
+    { id: 'galerie' as TabType, label: 'Galerie', icon: Image },
     { id: 'finances' as TabType, label: 'Finances', icon: DollarSign },
   ]
 
