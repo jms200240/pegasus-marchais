@@ -178,7 +178,7 @@ export default function VaccineReminders() {
                   {concerned.map(s => (
                     <div key={s.horse.id} className="flex items-center justify-between px-4 py-2.5">
                       <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: s.horse.color_hex }} />
+                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: s.horse.color_hex ?? undefined }} />
                         <span className="text-sm text-gray-700">{s.horse.name}</span>
                         <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${STATUS_STYLE[s.status].bg} ${STATUS_STYLE[s.status].text}`}>
                           {STATUS_STYLE[s.status].label}
