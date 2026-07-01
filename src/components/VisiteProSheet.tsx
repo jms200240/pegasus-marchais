@@ -5,6 +5,7 @@ import { CANONICAL_ORDER, HORSE_COLORS } from '../lib/types'
 import { X, ChevronDown, ChevronUp, Plus, CheckCircle, Camera, Stethoscope, Anvil, Hand } from 'lucide-react'
 import { getBoboTitle, Stars, VisitModal } from './BoboCard'
 import BoboWizard from './BoboWizard'
+import VeterinairePicker from './VeterinairePicker'
 
 // ─── Icône dent (absente de lucide-react — tracé Tabler Icons, licence MIT) ──
 function ToothIcon({ className = 'w-6 h-6' }: { className?: string }) {
@@ -74,6 +75,10 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
 
   // ── Sélection du métier ──────────────────────────────────────────────────
   const [metier, setMetier] = useState<Metier | null>(null)
+
+  // ── Vétérinaire présent ──────────────────────────────────────────────────
+  const [vetName, setVetName] = useState<string | null>(null)
+  const [vetPickerOpen, setVetPickerOpen] = useState(false)
 
   // ── Bobos actifs ─────────────────────────────────────────────────────────
   const [bobos, setBobos] = useState<ActiveBobo[]>([])
@@ -192,7 +197,7 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
       const newStatus   = computeStatus(evolution)
       const visitedAtISO = fromDatetimeLocal(visitedAt)
       const metierLabel = metier ? METIER_LABELS[metier] : 'pro'
-      const noteSuffix = ` (visite ${metierLabel})`
+      const noteSuffix = vetName ? ` (visite ${metierLabel} — ${vetName})` : ` (visite ${metierLabel})`
 
       const { error: insertErr } = await supabase
         .from('health_event_visits')
@@ -243,7 +248,7 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
     try {
       const visitedAtISO = fromDatetimeLocal(visitedAt)
       const metierLabel = metier ? METIER_LABELS[metier] : 'pro'
-      const noteSuffix = ` (visite ${metierLabel})`
+      const noteSuffix = vetName ? ` (visite ${metierLabel} — ${vetName})` : ` (visite ${metierLabel})`
       for (const bobo of remaining) {
         const currentSeverity = bobo.lastVisit?.severity ?? bobo.event.severity
         const { error: insertErr } = await supabase
@@ -320,7 +325,9 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
     ? bobos.find(b => b.event.id === visitModalBoboId) ?? null
     : null
 
-  const title = metier ? `Visite ${METIER_LABELS[metier]}` : 'Visite pro'
+  const title = metier
+    ? (vetName ? `Visite ${vetName}` : `Visite ${METIER_LABELS[metier]}`)
+    : 'Visite pro'
 
   // ─── Rendu ────────────────────────────────────────────────────────────────
   return (
@@ -406,14 +413,20 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
           {/* ── Contenu post-sélection métier ── */}
           {metier === 'veterinaire' && (
             <>
-              {/* ── Vétérinaire présent (picker photos — câblage au step suivant) ── */}
+              {/* ── Vétérinaire présent ── */}
               <section>
                 <button
                   type="button"
-                  className="w-full flex items-center justify-center gap-2 font-bold text-sm py-3 rounded-xl border-2 border-gray-200 bg-white text-gray-600 cursor-pointer hover:border-primary/40 transition-all"
+                  onClick={() => setVetPickerOpen(true)}
+                  className="w-full flex items-center justify-center gap-2 font-bold text-sm py-3 rounded-xl border-2 cursor-pointer transition-all"
+                  style={
+                    vetName
+                      ? { borderColor: '#bfe0c9', backgroundColor: '#f0fbf4', color: '#2f6b3f' }
+                      : { borderColor: '#e5e7eb', backgroundColor: 'white', color: '#4b5563' }
+                  }
                 >
                   <Stethoscope className="w-4 h-4" />
-                  Vétérinaire présent
+                  {vetName ?? 'Vétérinaire présent'}
                 </button>
               </section>
 
@@ -656,6 +669,14 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
             setOpenBoboId(null)
             fetchBobos()
           }}
+        />
+      )}
+
+      {/* ── VeterinairePicker ── */}
+      {vetPickerOpen && (
+        <VeterinairePicker
+          onSelect={nom => { setVetName(nom); setVetPickerOpen(false) }}
+          onClose={() => setVetPickerOpen(false)}
         />
       )}
     </>
