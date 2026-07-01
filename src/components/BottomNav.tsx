@@ -1,10 +1,9 @@
 import { Home, Heart, DollarSign, Image } from 'lucide-react'
 
-// Custom horse icon matching the Pegasus logo and branding
+// Custom horseshoe icon matching the Pegasus logo and branding
 const HorseIcon = ({ className = 'w-5 h-5' }: { className?: string }) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M3 20c3-1.5 5.5-3 8-3h4c2.5 0 4-1.5 4-4v-1c0-1.5-1.5-2.5-3-2.5h-1L13 6l-2-2H8c-2 0-3 1.5-3 3v8h-2" />
-    <circle cx="11" cy="8" r="1" />
+    <path d="M7 3v9a5 5 0 0 0 10 0V3" />
   </svg>
 )
 
