@@ -10,6 +10,7 @@ import drMelissaPayet from '../assets/veterinaires/dr-melissa-payet.jpeg'
 import drSophieVellard from '../assets/veterinaires/dr-sophie-vellard.jpeg'
 import drElsaCharpentier from '../assets/veterinaires/dr-elsa-charpentier.jpg'
 import drPaulLucas from '../assets/veterinaires/dr-paul-lucas.jpg'
+import drHermineScalbert from '../assets/veterinaires/dr-hermine-scalbert.png'
 
 // Photos statiques pour les 9 vétérinaires historiques (rang 1 à 9) — zéro latence.
 // Les vétérinaires ajoutés ensuite (rang >= 10) n'ont pas de photo, juste un avatar initiales.
@@ -23,6 +24,7 @@ const STATIC_PHOTOS: Record<number, string> = {
   7: drSophieVellard,
   8: drElsaCharpentier,
   9: drPaulLucas,
+  10: drHermineScalbert,
 }
 
 interface VeterinaireRow {
