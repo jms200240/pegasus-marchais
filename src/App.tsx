@@ -97,8 +97,8 @@ function App() {
         />
       ) : (
         <>
-          {/* Header — masqué dans la fiche cheval (l'en-tête coloré le remplace) */}
-          {!(activeTab === 'chevaux' && selectedHorseId) && (
+          {/* Header — visible uniquement sur l'Accueil, retiré des autres pages pour gagner de la place */}
+          {activeTab === 'accueil' && (
             <header className="flex justify-between items-center p-4 bg-white border-b border-gray-100/80 shadow-[0_2px_8px_rgba(0,0,0,0.01)] flex-shrink-0">
               <div>
                 <h1 className="text-lg font-black text-gray-900 tracking-tight flex items-center gap-1.5">
