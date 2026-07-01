@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { AmbiancePhoto, FarmAlert } from '../lib/types'
 import { formatDateTime } from '../lib/types'
-import { Wheat, Droplets, CalendarCheck, Image as ImageIcon } from 'lucide-react'
+import { Wheat, Droplets, CalendarCheck, Image as ImageIcon, Stethoscope } from 'lucide-react'
 import VisiteSheet from '../components/VisiteSheet'
+import VisiteProSheet from '../components/VisiteProSheet'
 
 // ─── Spinner inline ──────────────────────────────────────────────────────────
 function Spinner() {
@@ -23,6 +24,7 @@ export default function Accueil() {
   const [latestPhoto, setLatestPhoto] = useState<AmbiancePhoto | null>(null)
   const [loading, setLoading] = useState(true)
   const [visiteOpen, setVisiteOpen] = useState(false)
+  const [visiteProOpen, setVisiteProOpen] = useState(false)
 
   async function fetchData() {
     setLoading(true)
@@ -58,6 +60,12 @@ export default function Accueil() {
   // Rafraîchit les données à la fermeture de VisiteSheet
   function handleVisiteClose() {
     setVisiteOpen(false)
+    fetchData()
+  }
+
+  // Rafraîchit les données à la fermeture de VisiteProSheet
+  function handleVisiteProClose() {
+    setVisiteProOpen(false)
     fetchData()
   }
 
@@ -109,6 +117,17 @@ export default function Accueil() {
                 Démarrer une visite
               </button>
 
+              {/* ── Bouton Démarrer une visite pro ── */}
+              <button
+                type="button"
+                onClick={() => setVisiteProOpen(true)}
+                className="w-full flex items-center justify-center gap-2 font-bold text-xs text-gray-500 border border-gray-200 bg-white rounded-xl active:scale-[0.98] transition-transform cursor-pointer"
+                style={{ minHeight: '40px' }}
+              >
+                <Stethoscope className="w-4 h-4" />
+                Démarrer une visite pro
+              </button>
+
               {/* ── Dernière photo d'ambiance ── */}
               <section>
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
@@ -143,6 +162,9 @@ export default function Accueil() {
 
       {/* ── VisiteSheet ── */}
       {visiteOpen && <VisiteSheet onClose={handleVisiteClose} />}
+
+      {/* ── VisiteProSheet ── */}
+      {visiteProOpen && <VisiteProSheet onClose={handleVisiteProClose} />}
     </>
   )
 }
