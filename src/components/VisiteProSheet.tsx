@@ -72,9 +72,6 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
   // ── Sélection du métier ──────────────────────────────────────────────────
   const [metier, setMetier] = useState<Metier | null>(null)
 
-  // ── Vétérinaire présent (picker — câblage complet au step suivant) ───────
-  const [vetName, setVetName] = useState<string | null>(null)
-
   // ── Bobos actifs ─────────────────────────────────────────────────────────
   const [bobos, setBobos] = useState<ActiveBobo[]>([])
   const [bobosLoading, setBobosLoading] = useState(true)
@@ -181,8 +178,6 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
   }
 
   // ─── Enregistrer une évolution, avec mention du contexte "visite pro" ───
-  // Hypothèse : pas de colonne dédiée intervenant_type sur health_event_visits,
-  // donc le contexte est ajouté au texte de la note. À corriger si une colonne existe.
   async function handleEvolution(bobo: ActiveBobo, evolution: Evolution) {
     const eventId = bobo.event.id
     setSavingBoboId(eventId)
@@ -194,7 +189,7 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
       const newStatus   = computeStatus(evolution)
       const visitedAtISO = fromDatetimeLocal(visitedAt)
       const metierLabel = metier ? METIER_LABELS[metier] : 'pro'
-      const noteSuffix = vetName ? ` (visite ${metierLabel} — ${vetName})` : ` (visite ${metierLabel})`
+      const noteSuffix = ` (visite ${metierLabel})`
 
       const { error: insertErr } = await supabase
         .from('health_event_visits')
@@ -245,7 +240,7 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
     try {
       const visitedAtISO = fromDatetimeLocal(visitedAt)
       const metierLabel = metier ? METIER_LABELS[metier] : 'pro'
-      const noteSuffix = vetName ? ` (visite ${metierLabel} — ${vetName})` : ` (visite ${metierLabel})`
+      const noteSuffix = ` (visite ${metierLabel})`
       for (const bobo of remaining) {
         const currentSeverity = bobo.lastVisit?.severity ?? bobo.event.severity
         const { error: insertErr } = await supabase
@@ -322,7 +317,7 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
     ? bobos.find(b => b.event.id === visitModalBoboId) ?? null
     : null
 
-  const title = metier ? `Visite ${vetName ?? METIER_LABELS[metier]}` : 'Visite pro'
+  const title = metier ? `Visite ${METIER_LABELS[metier]}` : 'Visite pro'
 
   // ─── Rendu ────────────────────────────────────────────────────────────────
   return (
@@ -390,11 +385,10 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
               <section>
                 <button
                   type="button"
-                  onClick={() => { /* TODO step suivant : ouvre le picker photo classé par rang (Vétérinaires Escavet.xlsx) */ }}
                   className="w-full flex items-center justify-center gap-2 font-bold text-sm py-3 rounded-xl border-2 border-gray-200 bg-white text-gray-600 cursor-pointer hover:border-primary/40 transition-all"
                 >
                   <Stethoscope className="w-4 h-4" />
-                  {vetName ?? 'Vétérinaire présent'}
+                  Vétérinaire présent
                 </button>
               </section>
 
@@ -550,7 +544,6 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
               {/* ── Bouton vaccin (câblage au step suivant) ── */}
               <button
                 type="button"
-                onClick={() => { /* TODO step suivant : workflow vaccin (tags + sélection chevaux) */ }}
                 className="w-full flex items-center justify-center gap-2 font-bold text-sm py-3 rounded-xl border-2 border-gray-200 bg-white text-gray-600 cursor-pointer hover:border-primary/40 transition-all"
               >
                 Vaccin
@@ -559,7 +552,6 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
               {/* ── Bouton soin véto (câblage au step suivant) ── */}
               <button
                 type="button"
-                onClick={() => { /* TODO step suivant : workflow soin véto (tags + sélection chevaux + commentaire) */ }}
                 className="w-full flex items-center justify-center gap-2 font-bold text-sm py-3 rounded-xl border-2 border-gray-200 bg-white text-gray-600 cursor-pointer hover:border-primary/40 transition-all"
               >
                 Soin véto
