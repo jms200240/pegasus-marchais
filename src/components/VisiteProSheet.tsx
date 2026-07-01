@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Horse, HealthEvent, HealthEventVisit, Pathology } from '../lib/types'
 import { CANONICAL_ORDER, HORSE_COLORS } from '../lib/types'
-import { X, ChevronDown, ChevronUp, Plus, CheckCircle, Camera, Stethoscope, Anvil, Hand, Smile } from 'lucide-react'
+import { X, ChevronDown, ChevronUp, Plus, CheckCircle, Camera, Stethoscope, Anvil, Hand } from 'lucide-react'
 import { getBoboTitle, Stars, VisitModal } from './BoboCard'
 import BoboWizard from './BoboWizard'
 
