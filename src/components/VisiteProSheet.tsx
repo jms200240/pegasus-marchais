@@ -2,9 +2,19 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Horse, HealthEvent, HealthEventVisit, Pathology } from '../lib/types'
 import { CANONICAL_ORDER, HORSE_COLORS } from '../lib/types'
-import { X, ChevronDown, ChevronUp, Plus, CheckCircle, Camera, Stethoscope, Wrench, Activity, Smile } from 'lucide-react'
+import { X, ChevronDown, ChevronUp, Plus, CheckCircle, Camera, Stethoscope, Anvil, Hand, Smile } from 'lucide-react'
 import { getBoboTitle, Stars, VisitModal } from './BoboCard'
 import BoboWizard from './BoboWizard'
+
+// ─── Icône dent (absente de lucide-react — tracé Tabler Icons, licence MIT) ──
+function ToothIcon({ className = 'w-6 h-6' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M12 5.5c-1.074 -.586 -2.583 -1.5 -4 -1.5c-2.1 0 -4 1.247 -4 5c0 4.899 1.056 8.41 2.671 10.537c.573 .756 1.97 .521 2.567 -.236c.398 -.505 .819 -1.439 1.262 -2.801c.292 -.771 .892 -1.504 1.5 -1.5c.602 0 1.21 .737 1.5 1.5c.443 1.362 .864 2.295 1.262 2.8c.597 .759 2 .993 2.567 .237c1.615 -2.127 2.671 -5.637 2.671 -10.537c0 -3.74 -1.908 -5 -4 -5c-1.423 0 -2.92 .911 -4 1.5" />
+      <path d="M12 5.5l3 1.5" />
+    </svg>
+  )
+}
 
 // ─── Utilitaire datetime-local ────────────────────────────────────────────────
 function toDatetimeLocal(iso: string): string {
@@ -39,13 +49,6 @@ const METIER_LABELS: Record<Metier, string> = {
   marechal: 'Maréchal-ferrant',
   osteopathe: 'Ostéopathe',
   dentiste: 'Dentiste',
-}
-
-const METIER_ICONS: Record<Metier, typeof Stethoscope> = {
-  veterinaire: Stethoscope,
-  marechal: Wrench,
-  osteopathe: Activity,
-  dentiste: Smile,
 }
 
 // ─── Spinner ──────────────────────────────────────────────────────────────────
@@ -360,20 +363,42 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
                 Intervenant
               </p>
               <div className="grid grid-cols-2 gap-3">
-                {(Object.keys(METIER_LABELS) as Metier[]).map(m => {
-                  const Icon = METIER_ICONS[m]
-                  return (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => setMetier(m)}
-                      className="flex flex-col items-center justify-center gap-2 py-6 rounded-xl border-2 border-gray-200 bg-white text-gray-700 font-bold text-sm cursor-pointer hover:border-primary/40 transition-all active:scale-[0.97]"
-                    >
-                      <Icon className="w-6 h-6" />
-                      {METIER_LABELS[m]}
-                    </button>
-                  )
-                })}
+                <button
+                  type="button"
+                  onClick={() => setMetier('veterinaire')}
+                  className="flex flex-col items-center justify-center gap-2 py-6 rounded-xl border-2 border-green-200 bg-green-50 font-bold text-sm cursor-pointer hover:border-green-300 transition-all active:scale-[0.97]"
+                  style={{ color: '#2f6b3f' }}
+                >
+                  <Stethoscope className="w-6 h-6" />
+                  {METIER_LABELS.veterinaire}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMetier('marechal')}
+                  className="flex flex-col items-center justify-center gap-2 py-6 rounded-xl border-2 border-green-200 bg-green-50 font-bold text-sm cursor-pointer hover:border-green-300 transition-all active:scale-[0.97]"
+                  style={{ color: '#2f6b3f' }}
+                >
+                  <Anvil className="w-6 h-6" />
+                  {METIER_LABELS.marechal}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMetier('osteopathe')}
+                  className="flex flex-col items-center justify-center gap-2 py-6 rounded-xl border-2 border-green-200 bg-green-50 font-bold text-sm cursor-pointer hover:border-green-300 transition-all active:scale-[0.97]"
+                  style={{ color: '#2f6b3f' }}
+                >
+                  <Hand className="w-6 h-6" />
+                  {METIER_LABELS.osteopathe}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMetier('dentiste')}
+                  className="flex flex-col items-center justify-center gap-2 py-6 rounded-xl border-2 border-green-200 bg-green-50 font-bold text-sm cursor-pointer hover:border-green-300 transition-all active:scale-[0.97]"
+                  style={{ color: '#2f6b3f' }}
+                >
+                  <ToothIcon className="w-6 h-6" />
+                  {METIER_LABELS.dentiste}
+                </button>
               </div>
             </section>
           )}
