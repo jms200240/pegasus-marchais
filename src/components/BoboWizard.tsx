@@ -41,7 +41,7 @@ export function FichePathologie({
         {pathology.prevention && <Section titre="Prévention" texte={pathology.prevention} />}
 
         {pathology.source_url && (
-          
+          <a
             href={pathology.source_url}
             target="_blank"
             rel="noopener noreferrer"
