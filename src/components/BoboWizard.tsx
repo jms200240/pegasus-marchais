@@ -41,7 +41,7 @@ export function FichePathologie({
         {pathology.prevention && <Section titre="Prévention" texte={pathology.prevention} />}
 
         {pathology.source_url && (
-          <a
+          
             href={pathology.source_url}
             target="_blank"
             rel="noopener noreferrer"
@@ -748,8 +748,11 @@ export default function BoboWizard({ horses, onCreated, onClose }: BoboWizardPro
           {renderStep()}
         </div>
 
-        {/* Barre de navigation */}
-        <div className="flex items-center gap-2 px-5 py-4 border-t border-gray-200/60 bg-white/70 flex-shrink-0 backdrop-blur-sm">
+        {/* Barre de navigation — padding bas renforcé pour rester au-dessus de BottomNav (z-[100]) */}
+        <div
+          className="flex items-center gap-2 px-5 pt-4 border-t border-gray-200/60 bg-white/70 flex-shrink-0 backdrop-blur-sm"
+          style={{ paddingBottom: 'calc(1rem + 64px + env(safe-area-inset-bottom))' }}
+        >
           {step > 1 ? (
             <button
               type="button"
