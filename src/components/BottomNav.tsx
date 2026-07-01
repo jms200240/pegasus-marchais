@@ -1,4 +1,4 @@
-import { Home, Heart, DollarSign, Image } from 'lucide-react'
+import { Home, Stethoscope, DollarSign, Image } from 'lucide-react'
 
 // Horse head icon — traced from Pegasus reference logo (skeletonized + simplified)
 const HorseIcon = ({ className = 'w-5 h-5' }: { className?: string }) => (
@@ -21,7 +21,7 @@ interface BottomNavProps {
 export default function BottomNav({ activeTab, setActiveTab }: BottomNavProps) {
   const tabs = [
     { id: 'accueil' as TabType, label: 'Accueil', icon: Home },
-    { id: 'soins' as TabType, label: 'Soins', icon: Heart },
+    { id: 'soins' as TabType, label: 'Soins', icon: Stethoscope },
     { id: 'chevaux' as TabType, label: 'Chevaux', icon: HorseIcon },
     { id: 'galerie' as TabType, label: 'Galerie', icon: Image },
     { id: 'finances' as TabType, label: 'Finances', icon: DollarSign },
