@@ -5,6 +5,10 @@
   --color-primary-dark: #224d2e;
   --color-cream: #F6F2EC;
   --color-active: #2f6b3f;
+
+  /* Lisibilité mobile : tailles de texte de base relevées */
+  --text-xs: 0.8125rem;   /* 13px au lieu de 12px */
+  --text-sm: 0.9375rem;   /* 15px au lieu de 14px */
 }
 
 /* Style de base */
@@ -36,3 +40,10 @@ html, body {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Lisibilité mobile : les tailles arbitraires (text-[Npx]) héritées
+   de la maquette desktop sont trop petites au doigt. Surcharge globale,
+   sans toucher aux composants. */
+.text-\[9px\]  { font-size: 11px !important; }
+.text-\[10px\] { font-size: 12px !important; }
+.text-\[11px\] { font-size: 13px !important; }
