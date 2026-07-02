@@ -23,6 +23,7 @@ React + TypeScript + Tailwind CSS + Vite (PWA) · Supabase (PostgreSQL + Auth + 
 - **Icônes manquantes** : sourcer depuis Tabler Icons ou dériver mathématiquement, pas de dessin main levée.
 - **Finances — HT/taux TVA** : jamais écrits en base, affichés uniquement pour vérification contre la facture papier ; seul le TTC calculé (arrondi 2 décimales) est stocké.
 - **intervenant_type** (`invoices`/`expenses`) réutilise l'énumération de `HealthEvent.type` (`veterinaire`/`marechal`/`dentiste`/`osteo`/`groom`) — pas de nouvelle nomenclature.
+- **health_events.source** : colonne texte libre (Famille/Groom/Vétérinaire/etc.) traçant qui a enregistré l'entrée — pas de contrainte stricte, ouverte pour usages futurs.
 
 ## Workflow de livraison (à respecter strictement)
 
@@ -42,10 +43,13 @@ Opérationnel en production (`pegasus-marchais.vercel.app`) :
 - VaccineReminders (regroupement collapsible, exclusions permanentes, calcul temps réel)
 - 121 lignes d'historique de vaccination importées en Supabase
 - Finances : Saisie de facture (multi-chevaux ou 1 seul cheval, bucket "Autre" hors suivi) + Suivi des coûts (total annuel, ventilation cheval/prestataire en bar charts avec drill-down, factures via InvoiceDetailSheet — ouverture en lecture seule, bouton "Modifier" pour éditer)
+- VisiteProSheet — Maréchal-ferrant : MarechalPicker (2 maréchaux, photos bundlées), bobos actifs filtrés sur pathologies pied/fourbure (Seime, Abcès du pied, Fourbure, Pourriture de fourchette, Fourmilière), flux "Soin maréchal" en cascade (Parage 4 pieds → Ferrure antérieurs → Ferrure 4 pieds) écrivant dans `health_events`
+- Fiches Vaccins (contenu IFCE, 4 vaccins en accordéon) accessible depuis Rappels vaccins
+- Échelle de gravité en dégradé couleur (vert→rouge, remplace les étoiles), lecture seule et sélection interactive
 
-Tables Supabase existantes : `health_events`, `health_event_visits`, `farm_alerts`, `ambiance_photos`, `photo_tags`, `vaccinations`, `vaccine_exclusions`, `veterinaires`, `invoices`, `invoices_staging`, `expenses` (RLS confirmé : Famille = ALL, Groom = aucun accès). `invoices`/`expenses` utilisées par l'écran Finances ; `invoices_staging` toujours sans code applicatif (réservée au pipeline OCR).
+Tables Supabase existantes : `health_events`, `health_event_visits`, `farm_alerts`, `ambiance_photos`, `photo_tags`, `vaccinations`, `vaccine_exclusions`, `veterinaires`, `marechaux`, `invoices`, `invoices_staging`, `expenses` (RLS confirmé : Famille = ALL, Groom = aucun accès). `invoices`/`expenses` utilisées par l'écran Finances ; `invoices_staging` toujours sans code applicatif (réservée au pipeline OCR).
 
-Restant à faire sur les workflows Visite pro : Vaccin, Soin véto, placeholders Maréchal-ferrant/Ostéopathe/Dentiste.
+Restant à faire sur les workflows Visite pro : Soin véto, placeholders Ostéopathe/Dentiste (pathologies dentiste déjà identifiées : Troubles dentaires/surdents, à câbler quand ce workflow sera construit).
 
 ## Roadmap
 
