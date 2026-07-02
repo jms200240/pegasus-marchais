@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Horse, HealthEvent, HealthEventVisit, Pathology } from '../lib/types'
 import { CANONICAL_ORDER, HORSE_COLORS } from '../lib/types'
-import { X, ChevronDown, ChevronUp, Plus, CheckCircle, Camera, Stethoscope, Anvil, Hand } from 'lucide-react'
+import { X, ChevronDown, ChevronUp, Plus, Check, CheckCircle, Camera, Stethoscope, Anvil, Hand } from 'lucide-react'
 import { getBoboTitle, VisitModal } from './BoboCard'
 import BoboWizard from './BoboWizard'
 import VeterinairePicker from './VeterinairePicker'
+import MarechalPicker from './MarechalPicker'
 import VaccinSheet from './VaccinSheet'
 
 // ─── Icône dent (absente de lucide-react — tracé Tabler Icons, licence MIT) ──
@@ -53,6 +54,88 @@ const METIER_LABELS: Record<Metier, string> = {
   dentiste: 'Dentiste',
 }
 
+// Pathologies du ressort du maréchal-ferrant (confirmé par l'utilisateur).
+const PATHOLOGIES_MARECHAL = [
+  'seime',
+  'abcès du pied',
+  'abces du pied',
+  'fourbure',
+  'pourriture de fourchette',
+  'fourmilière',
+  'fourmiliere',
+  'ligne blanche',
+]
+
+function isPathologieMarechal(bobo: ActiveBobo): boolean {
+  const nom = (bobo.pathology?.name ?? '').toLowerCase()
+  return PATHOLOGIES_MARECHAL.some(p => nom.includes(p))
+}
+
+// ─── Étape de soin maréchal (parage / ferrure) — sélection chevaux + Valider ──
+interface SoinStepCardProps {
+  title: string
+  horses: Horse[]
+  selected: Set<string>
+  validated: boolean
+  saving: boolean
+  onToggle: (id: string) => void
+  onValidate: () => void
+}
+
+function SoinStepCard({ title, horses, selected, validated, saving, onToggle, onValidate }: SoinStepCardProps) {
+  if (validated) {
+    const chosen = horses.filter(h => selected.has(h.id))
+    return (
+      <div className="bg-white rounded-xl shadow-xs p-4">
+        <div className="flex items-center gap-1.5 text-sm font-bold" style={{ color: '#2f6b3f' }}>
+          <Check className="w-4 h-4" />
+          {title}
+        </div>
+        <p className="text-xs text-gray-500 mt-1">
+          {chosen.length > 0 ? chosen.map(h => h.name).join(', ') : 'Aucun cheval'}
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-white rounded-xl shadow-xs p-4 space-y-3">
+      <p className="text-sm font-bold text-gray-800">{title}</p>
+      <div className="flex flex-wrap gap-2">
+        {horses.map(horse => {
+          const isSelected = selected.has(horse.id)
+          const color = horse.color_hex ?? HORSE_COLORS[horse.name] ?? '#2f6b3f'
+          return (
+            <button
+              key={horse.id}
+              type="button"
+              onClick={() => onToggle(horse.id)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-bold cursor-pointer transition-all active:scale-[0.97] border-2"
+              style={
+                isSelected
+                  ? { backgroundColor: color, borderColor: color, color: 'white' }
+                  : { backgroundColor: 'white', borderColor: '#e5e7eb', color: '#4b5563' }
+              }
+            >
+              {isSelected && <Check className="w-3 h-3" />}
+              {horse.name}
+            </button>
+          )
+        })}
+      </div>
+      <button
+        type="button"
+        onClick={onValidate}
+        disabled={saving}
+        className="w-full py-2.5 rounded-lg text-xs font-bold text-white cursor-pointer disabled:opacity-50"
+        style={{ backgroundColor: '#2f6b3f' }}
+      >
+        {saving ? 'Enregistrement…' : 'Valider'}
+      </button>
+    </div>
+  )
+}
+
 // ─── Spinner ──────────────────────────────────────────────────────────────────
 function Spinner() {
   return (
@@ -80,6 +163,21 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
   // ── Vétérinaire présent ──────────────────────────────────────────────────
   const [vetName, setVetName] = useState<string | null>(null)
   const [vetPickerOpen, setVetPickerOpen] = useState(false)
+
+  // ── Maréchal-ferrant présent ──────────────────────────────────────────────
+  const [marechalName, setMarechalName] = useState<string | null>(null)
+  const [marechalPickerOpen, setMarechalPickerOpen] = useState(false)
+
+  // ── Soin maréchal (parage / ferrure, en cascade) ──────────────────────────
+  const [soinMarechalOpen, setSoinMarechalOpen] = useState(false)
+  const [parageSelected, setParageSelected] = useState<Set<string>>(new Set())
+  const [parageValidated, setParageValidated] = useState(false)
+  const [ferrureAntSelected, setFerrureAntSelected] = useState<Set<string>>(new Set())
+  const [ferrureAntValidated, setFerrureAntValidated] = useState(false)
+  const [ferrure4Selected, setFerrure4Selected] = useState<Set<string>>(new Set())
+  const [ferrure4Validated, setFerrure4Validated] = useState(false)
+  const [soinSaving, setSoinSaving] = useState(false)
+  const [soinError, setSoinError] = useState<string | null>(null)
 
   // ── Vaccin ────────────────────────────────────────────────────────────────
   const [vaccinSheetOpen, setVaccinSheetOpen] = useState(false)
@@ -324,6 +422,61 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
       setAmbianceUploading(false)
     }
   }
+
+  // ─── Toggle générique pour les Set<string> de sélection cheval ───────────
+  function toggleInSet(setter: React.Dispatch<React.SetStateAction<Set<string>>>, id: string) {
+    setter(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  // ─── Persistance d'une étape de soin maréchal (health_events, source=Famille) ──
+  async function validateSoinStep(label: string, horseIds: string[], markValidated: () => void) {
+    setSoinSaving(true)
+    setSoinError(null)
+    try {
+      if (horseIds.length > 0) {
+        const visitedAtISO = fromDatetimeLocal(visitedAt)
+        const noteSuffix = marechalName ? ` (visite Maréchal-ferrant — ${marechalName})` : ' (visite Maréchal-ferrant)'
+        const rows = horseIds.map(horseId => ({
+          horse_id: horseId,
+          type: 'marechal' as const,
+          status: 'closed' as const,
+          severity: 1,
+          opened_at: visitedAtISO,
+          closed_at: visitedAtISO,
+          note: label + noteSuffix,
+          source: 'Famille',
+        }))
+        const { error } = await supabase.from('health_events').insert(rows)
+        if (error) throw error
+        await fetchBobos()
+      }
+      markValidated()
+    } catch (err: unknown) {
+      setSoinError(err instanceof Error ? err.message : "Erreur lors de l'enregistrement.")
+    } finally {
+      setSoinSaving(false)
+    }
+  }
+
+  const bobosMarechal = bobos.filter(isPathologieMarechal)
+
+  const sortedHorses = [...horses].sort((a, b) => {
+    const ia = CANONICAL_ORDER.indexOf(a.name as typeof CANONICAL_ORDER[number])
+    const ib = CANONICAL_ORDER.indexOf(b.name as typeof CANONICAL_ORDER[number])
+    if (ia === -1 && ib === -1) return a.name.localeCompare(b.name)
+    if (ia === -1) return 1
+    if (ib === -1) return -1
+    return ia - ib
+  })
+
+  const remainingApresParage = sortedHorses.filter(h => !parageSelected.has(h.id))
+  const remainingApresFerrureAnt = remainingApresParage.filter(h => !ferrureAntSelected.has(h.id))
+  const showFerrure4Step = parageValidated && ferrureAntValidated && remainingApresFerrureAnt.length > 0
 
   const visitModalBobo = visitModalBoboId !== null
     ? bobos.find(b => b.event.id === visitModalBoboId) ?? null
@@ -631,8 +784,138 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
             </>
           )}
 
-          {/* ── Placeholder Maréchal-ferrant / Ostéopathe / Dentiste ── */}
-          {metier && metier !== 'veterinaire' && (
+          {/* ── Maréchal-ferrant ── */}
+          {metier === 'marechal' && (
+            <>
+              <section>
+                <button
+                  type="button"
+                  onClick={() => setMarechalPickerOpen(true)}
+                  className="w-full flex items-center justify-center gap-2 font-bold text-sm py-3 rounded-xl border-2 cursor-pointer transition-all"
+                  style={
+                    marechalName
+                      ? { borderColor: '#bfe0c9', backgroundColor: '#f0fbf4', color: '#2f6b3f' }
+                      : { borderColor: '#e5e7eb', backgroundColor: 'white', color: '#4b5563' }
+                  }
+                >
+                  <Anvil className="w-4 h-4" />
+                  {marechalName ?? 'Maréchal-ferrant présent'}
+                </button>
+              </section>
+
+              {/* ── Bobos actifs — pieds / fourbure ── */}
+              <section>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
+                  Bobos actifs — pieds / fourbure
+                </p>
+                {bobosLoading ? (
+                  <Spinner />
+                ) : bobosMarechal.length === 0 ? (
+                  <div className="bg-white rounded-xl p-5 text-center shadow-xs">
+                    <p className="text-sm font-semibold text-gray-700">Aucun bobo actif aux pieds 🎉</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {bobosMarechal.map(bobo => {
+                      const { event, horse, pathology } = bobo
+                      const horseColor = horse?.color_hex ?? (horse ? HORSE_COLORS[horse.name] : null) ?? '#2f6b3f'
+                      const titre = getBoboTitle(event, pathology)
+                      return (
+                        <div key={event.id} className="bg-white rounded-xl shadow-xs px-4 py-3 flex items-center gap-2.5">
+                          {horse && (
+                            <span
+                              className="text-xs font-bold px-2 py-0.5 rounded-full text-white flex-shrink-0"
+                              style={{ backgroundColor: horseColor }}
+                            >
+                              {horse.name}
+                            </span>
+                          )}
+                          <span className="flex-1 min-w-0 text-sm font-bold text-gray-800 truncate">{titre}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </section>
+
+              {/* ── Soin maréchal (parage / ferrure en cascade) ── */}
+              {!soinMarechalOpen ? (
+                <button
+                  type="button"
+                  onClick={() => setSoinMarechalOpen(true)}
+                  className="w-full flex items-center justify-center gap-2 font-bold text-sm py-3 rounded-xl border-2 border-gray-200 bg-white text-gray-600 cursor-pointer hover:border-primary/40 transition-all"
+                >
+                  Soin maréchal
+                </button>
+              ) : (
+                <section className="space-y-3">
+                  <SoinStepCard
+                    title="Parage 4 pieds"
+                    horses={sortedHorses}
+                    selected={parageSelected}
+                    validated={parageValidated}
+                    saving={soinSaving}
+                    onToggle={id => toggleInSet(setParageSelected, id)}
+                    onValidate={() =>
+                      validateSoinStep('Parage 4 pieds', Array.from(parageSelected), () => setParageValidated(true))
+                    }
+                  />
+
+                  {parageValidated && (
+                    <SoinStepCard
+                      title="Ferrure antérieurs"
+                      horses={remainingApresParage}
+                      selected={ferrureAntSelected}
+                      validated={ferrureAntValidated}
+                      saving={soinSaving}
+                      onToggle={id => toggleInSet(setFerrureAntSelected, id)}
+                      onValidate={() =>
+                        validateSoinStep('Ferrure antérieurs', Array.from(ferrureAntSelected), () => setFerrureAntValidated(true))
+                      }
+                    />
+                  )}
+
+                  {showFerrure4Step && (
+                    <SoinStepCard
+                      title="Ferrure 4 pieds"
+                      horses={remainingApresFerrureAnt}
+                      selected={ferrure4Selected}
+                      validated={ferrure4Validated}
+                      saving={soinSaving}
+                      onToggle={id => toggleInSet(setFerrure4Selected, id)}
+                      onValidate={() =>
+                        validateSoinStep('Ferrure 4 pieds', Array.from(ferrure4Selected), () => setFerrure4Validated(true))
+                      }
+                    />
+                  )}
+
+                  {soinError && (
+                    <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{soinError}</p>
+                  )}
+
+                  {parageValidated && ferrureAntValidated && !showFerrure4Step && (
+                    <div className="flex items-center justify-center gap-1.5 text-sm font-bold" style={{ color: '#2f6b3f' }}>
+                      <Check className="w-4 h-4" />
+                      Soin maréchal réparti sur les 7 chevaux
+                    </div>
+                  )}
+                </section>
+              )}
+
+              <section className="text-center">
+                <button
+                  type="button"
+                  onClick={() => setMetier(null)}
+                  className="text-xs text-gray-400 underline underline-offset-2 cursor-pointer"
+                >
+                  ← Changer d'intervenant
+                </button>
+              </section>
+            </>
+          )}
+
+          {/* ── Placeholder Ostéopathe / Dentiste ── */}
+          {metier && metier !== 'veterinaire' && metier !== 'marechal' && (
             <section className="bg-white rounded-xl p-5 text-center shadow-xs">
               <p className="text-sm font-semibold text-gray-700">Bientôt disponible</p>
               <p className="text-xs text-gray-400 mt-1">
@@ -680,6 +963,14 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
         <VeterinairePicker
           onSelect={nom => { setVetName(nom); setVetPickerOpen(false) }}
           onClose={() => setVetPickerOpen(false)}
+        />
+      )}
+
+      {/* ── MarechalPicker ── */}
+      {marechalPickerOpen && (
+        <MarechalPicker
+          onSelect={nom => { setMarechalName(nom); setMarechalPickerOpen(false) }}
+          onClose={() => setMarechalPickerOpen(false)}
         />
       )}
 

@@ -47,6 +47,7 @@ export interface HealthEvent {
   photo_url: string | null
   attachment_urls: string[] | null
   photo_urls: string[] | null    // URLs signées Supabase Storage (bucket bobo-photos)
+  source: string | null          // qui a enregistré l'entrée : Famille / Groom / Veterinaire, etc.
   created_at: string
   updated_at: string
 }
@@ -117,6 +118,14 @@ export interface Vaccination {
 }
 
 export interface Veterinaire {
+  id: string
+  rang: number
+  nom: string
+  photo_url: string | null
+  created_at: string
+}
+
+export interface Marechal {
   id: string
   rang: number
   nom: string
