@@ -41,7 +41,7 @@ Opérationnel en production (`pegasus-marchais.vercel.app`) :
 - VisiteProSheet (sélecteur métier : Vétérinaire, Maréchal-ferrant, Ostéopathe, Dentiste)
 - VaccineReminders (regroupement collapsible, exclusions permanentes, calcul temps réel)
 - 121 lignes d'historique de vaccination importées en Supabase
-- Finances : Saisie de facture (multi-chevaux ou 1 seul cheval, bucket "Autre" hors suivi) + Suivi des coûts (total annuel, ventilation cheval/prestataire en bar charts avec drill-down, factures consultables/modifiables via InvoiceDetailSheet)
+- Finances : Saisie de facture (multi-chevaux ou 1 seul cheval, bucket "Autre" hors suivi) + Suivi des coûts (total annuel, ventilation cheval/prestataire en bar charts avec drill-down, factures via InvoiceDetailSheet — ouverture en lecture seule, bouton "Modifier" pour éditer)
 
 Tables Supabase existantes : `health_events`, `health_event_visits`, `farm_alerts`, `ambiance_photos`, `photo_tags`, `vaccinations`, `vaccine_exclusions`, `veterinaires`, `invoices`, `invoices_staging`, `expenses` (RLS confirmé : Famille = ALL, Groom = aucun accès). `invoices`/`expenses` utilisées par l'écran Finances ; `invoices_staging` toujours sans code applicatif (réservée au pipeline OCR).
 
