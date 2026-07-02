@@ -3,17 +3,8 @@ import { supabase } from '../lib/supabase'
 import type { Horse, HealthEvent, HealthEventVisit, Pathology } from '../lib/types'
 import { HORSE_COLORS, formatDateTime } from '../lib/types'
 import { AlertCircle, Camera, CheckCircle, Clock, Info, Calendar, ChevronDown, ChevronUp, Plus, X } from 'lucide-react'
-import { StarPicker, FichePathologie } from './BoboWizard'
-
-// ─── Étoiles gravité (lecture seule) ────────────────────────────────────────
-export function Stars({ count }: { count: number }) {
-  return (
-    <span className="text-amber-400 text-xs leading-none">
-      {'★'.repeat(Math.min(count, 5))}
-      <span className="text-gray-200">{'★'.repeat(Math.max(0, 5 - count))}</span>
-    </span>
-  )
-}
+import { FichePathologie } from './BoboWizard'
+import SeverityScale from './SeverityScale'
 
 // ─── Badge statut ────────────────────────────────────────────────────────────
 export function StatusBadge({ status }: { status: 'open' | 'active' | 'closed' }) {
@@ -186,7 +177,7 @@ export function VisitModal({
             <label className="text-sm font-semibold text-gray-500 block mb-1.5">
               Gravité
             </label>
-            <StarPicker value={severity} onChange={setSeverity} />
+            <SeverityScale value={severity} onChange={setSeverity} showLabel />
           </div>
 
           {/* Photos */}
@@ -356,7 +347,7 @@ export default function BoboCard({
       {/* Barre d'action basse de la carte */}
       <div className="flex items-center justify-between pt-2.5 border-t border-gray-100 text-xs">
         <div className="flex flex-col gap-0.5">
-          <Stars count={event.severity} />
+          <SeverityScale value={event.severity} size="xs" />
           <span className="text-[9px] text-gray-400 flex items-center gap-1">
             <Calendar className="w-2.5 h-2.5" />
             Début : {formatDateTime(event.opened_at)}
@@ -406,7 +397,7 @@ export default function BoboCard({
               <div className="flex justify-between items-center text-[9px] text-gray-400">
                 <span>{formatDateTime(v.visited_at)}</span>
                 <div className="flex items-center gap-1.5">
-                  <Stars count={v.severity} />
+                  <SeverityScale value={v.severity} size="xs" />
                   <StatusBadge status={v.status} />
                 </div>
               </div>
@@ -436,7 +427,7 @@ export default function BoboCard({
               <div className="flex justify-between items-center text-[9px] text-gray-400">
                 <span className="italic">Note initiale</span>
                 <div className="flex items-center gap-1.5">
-                  <Stars count={event.severity} />
+                  <SeverityScale value={event.severity} size="xs" />
                   <StatusBadge status="open" />
                 </div>
               </div>

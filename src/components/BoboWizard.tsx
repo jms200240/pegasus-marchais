@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import type { Horse, Pathology } from '../lib/types'
 import { CANONICAL_ORDER, HORSE_COLORS } from '../lib/types'
 import { X, ChevronLeft, Camera, ExternalLink, Search } from 'lucide-react'
+import SeverityScale from './SeverityScale'
 
 // ─── Fiche pathologie ─────────────────────────────────────────────────────
 // Export nommé — réutilisé dans Soins.tsx (bouton Info)
@@ -68,26 +69,6 @@ function Section({ titre, texte }: { titre: string; texte: string }) {
     <div className="mb-4">
       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">{titre}</p>
       <p className="text-sm text-gray-700 leading-relaxed">{texte}</p>
-    </div>
-  )
-}
-
-// ─── StarPicker ──────────────────────────────────────────────────────────
-export function StarPicker({ value, onChange }: { value: number; onChange: (n: number) => void }) {
-  return (
-    <div className="flex gap-2">
-      {[1, 2, 3, 4, 5].map(i => (
-        <button
-          key={i}
-          type="button"
-          onClick={() => onChange(i)}
-          className={`text-3xl leading-none cursor-pointer transition-colors ${
-            i <= value ? 'text-amber-400' : 'text-gray-200'
-          }`}
-        >
-          ★
-        </button>
-      ))}
     </div>
   )
 }
@@ -182,8 +163,6 @@ const FACES_MEMBRE = [
   'Face antérieure',
   'Face postérieure',
 ]
-
-const LIBELLES_GRAVITE = ['', 'Légère', 'Modérée', 'Notable', 'Sérieuse', 'Urgente']
 
 // ─── BoboWizard (export par défaut) ──────────────────────────────────────
 interface BoboWizardProps {
@@ -621,9 +600,8 @@ export default function BoboWizard({ horses, onCreated, onClose }: BoboWizardPro
                 ? "Pré-remplie d'après la pathologie — modifiable."
                 : "Évalue de 1 (légère) à 5 (urgence vitale)."}
             </p>
-            <div className="flex flex-col items-center gap-3">
-              <StarPicker value={severity} onChange={setSeverity} />
-              <p className="text-sm font-bold text-gray-600">{LIBELLES_GRAVITE[severity]}</p>
+            <div className="px-2">
+              <SeverityScale value={severity} onChange={setSeverity} showLabel />
             </div>
           </div>
         )

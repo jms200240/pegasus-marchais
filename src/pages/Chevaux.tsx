@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import type { Horse, HealthEvent } from '../lib/types'
 import { CANONICAL_ORDER, HORSE_COLORS } from '../lib/types'
 import { ChevronRight, AlertCircle, Clock } from 'lucide-react'
+import SeverityScale from '../components/SeverityScale'
 
 interface ChevauxProps {
   onSelectHorse: (id: string) => void
@@ -17,15 +18,6 @@ function Spinner() {
         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
       </svg>
     </div>
-  )
-}
-
-// ─── Étoiles gravité ──────────────────────────────────────────────────
-function Stars({ count }: { count: number }) {
-  return (
-    <span className="text-red-400 text-xs leading-none">
-      {'★'.repeat(Math.min(count, 5))}{'☆'.repeat(Math.max(0, 5 - count))}
-    </span>
   )
 }
 
@@ -102,8 +94,8 @@ function HorseCard({
             )}
           </div>
           {hasBobos && (
-            <div className="mt-1">
-              <Stars count={worstSeverity} />
+            <div className="mt-1 inline-flex bg-black/15 rounded-full px-1.5 py-1">
+              <SeverityScale value={worstSeverity} size="xs" />
             </div>
           )}
         </div>
