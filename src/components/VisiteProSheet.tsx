@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import type { Horse, HealthEvent, HealthEventVisit, Pathology } from '../lib/types'
 import { CANONICAL_ORDER, HORSE_COLORS } from '../lib/types'
 import { X, ChevronDown, ChevronUp, Plus, CheckCircle, Camera, Stethoscope, Anvil, Hand } from 'lucide-react'
-import { getBoboTitle, Stars, VisitModal } from './BoboCard'
+import { getBoboTitle, VisitModal } from './BoboCard'
 import BoboWizard from './BoboWizard'
 import VeterinairePicker from './VeterinairePicker'
 
@@ -446,10 +446,9 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
                 ) : (
                   <div className="space-y-2">
                     {bobos.map(bobo => {
-                      const { event, horse, pathology, lastVisit } = bobo
+                      const { event, horse, pathology } = bobo
                       const horseColor = horse?.color_hex ?? (horse ? HORSE_COLORS[horse.name] : null) ?? '#2f6b3f'
                       const titre = getBoboTitle(event, pathology)
-                      const currentSeverity = lastVisit?.severity ?? event.severity
                       const isOpen = openBoboId === event.id
                       const isSaving = savingBoboId === event.id
                       const errMsg = boboErrors[event.id]
@@ -463,16 +462,15 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
                           >
                             {horse && (
                               <span
-                                className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white flex-shrink-0"
+                                className="text-xs font-bold px-2 py-0.5 rounded-full text-white flex-shrink-0"
                                 style={{ backgroundColor: horseColor }}
                               >
                                 {horse.name}
                               </span>
                             )}
-                            <span className="flex-1 min-w-0 text-xs font-bold text-gray-800 truncate">
+                            <span className="flex-1 min-w-0 text-sm font-bold text-gray-800 truncate">
                               {titre}
                             </span>
-                            <Stars count={currentSeverity} />
                             {isOpen
                               ? <ChevronUp className="w-4 h-4 text-gray-400 flex-shrink-0" />
                               : <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />
@@ -533,9 +531,9 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
                                 <button
                                   type="button"
                                   onClick={() => setVisitModalBoboId(event.id)}
-                                  className="text-[11px] text-gray-400 hover:text-gray-600 underline underline-offset-2 cursor-pointer transition-colors"
+                                  className="text-sm font-semibold text-gray-500 hover:text-gray-700 underline underline-offset-2 cursor-pointer transition-colors"
                                 >
-                                  Modifier (commentaire, gravité, photo)
+                                  Modifier / commenter
                                 </button>
                               </div>
                             </div>
