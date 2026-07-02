@@ -21,6 +21,8 @@ React + TypeScript + Tailwind CSS + Vite (PWA) · Supabase (PostgreSQL + Auth + 
 - **Contexte visite pro** : stocké en suffixe texte dans `note` (pas de colonne dédiée sur `health_event_visits`).
 - **UNRESOLVED_IMPORT** sur une image = toujours un fichier manquant/non commité, jamais un bug logique.
 - **Icônes manquantes** : sourcer depuis Tabler Icons ou dériver mathématiquement, pas de dessin main levée.
+- **Finances — HT/taux TVA** : jamais écrits en base, affichés uniquement pour vérification contre la facture papier ; seul le TTC calculé (arrondi 2 décimales) est stocké.
+- **intervenant_type** (`invoices`/`expenses`) réutilise l'énumération de `HealthEvent.type` (`veterinaire`/`marechal`/`dentiste`/`osteo`/`groom`) — pas de nouvelle nomenclature.
 
 ## Workflow de livraison (à respecter strictement)
 
@@ -32,21 +34,22 @@ React + TypeScript + Tailwind CSS + Vite (PWA) · Supabase (PostgreSQL + Auth + 
 
 ## État actuel (à mettre à jour à chaque sprint)
 
-Sprints livrés : S1 (fondation), S2 (module Chevaux), S3 (Soins/Bobos — BoboWizard 5 étapes, BoboCard journal), S4 (route /visite — VisiteSheet, galerie photos filtrée par tags).
+Sprints livrés : S1 (fondation), S2 (module Chevaux), S3 (Soins/Bobos — BoboWizard 5 étapes, BoboCard journal), S4 (route /visite — VisiteSheet, galerie photos filtrée par tags), S5 partiel (module Finances — menu Saisie de facture / Suivi des coûts, ventilation multi-chevaux ou 1 seul cheval, bar charts drill-down cheval↔prestataire, fiche facture consultable/modifiable ; pipeline OCR/staging non démarré).
 
 Opérationnel en production (`pegasus-marchais.vercel.app`) :
 - VeterinairePicker (10 vétérinaires, photos statiques bundlées, rang 1–10)
 - VisiteProSheet (sélecteur métier : Vétérinaire, Maréchal-ferrant, Ostéopathe, Dentiste)
 - VaccineReminders (regroupement collapsible, exclusions permanentes, calcul temps réel)
 - 121 lignes d'historique de vaccination importées en Supabase
+- Finances : Saisie de facture (multi-chevaux ou 1 seul cheval, bucket "Autre" hors suivi) + Suivi des coûts (total annuel, ventilation cheval/prestataire en bar charts avec drill-down, factures consultables/modifiables via InvoiceDetailSheet)
 
-Tables Supabase existantes : `health_events`, `health_event_visits`, `farm_alerts`, `ambiance_photos`, `photo_tags`, `vaccinations`, `vaccine_exclusions`, `veterinaires`, `invoices`, `invoices_staging`, `expenses` (schema créé en amont, aucun code applicatif ne les utilise encore — RLS confirmé (policy Famille = ALL, pas d'accès Groom)).
+Tables Supabase existantes : `health_events`, `health_event_visits`, `farm_alerts`, `ambiance_photos`, `photo_tags`, `vaccinations`, `vaccine_exclusions`, `veterinaires`, `invoices`, `invoices_staging`, `expenses` (RLS confirmé : Famille = ALL, Groom = aucun accès). `invoices`/`expenses` utilisées par l'écran Finances ; `invoices_staging` toujours sans code applicatif (réservée au pipeline OCR).
 
 Restant à faire sur les workflows Visite pro : Vaccin, Soin véto, placeholders Maréchal-ferrant/Ostéopathe/Dentiste.
 
 ## Roadmap
 
-- S5 : module Finances/OCR (pipeline n8n + Claude Vision pour factures, réconciliation par cheval)
+- S5 (suite) : pipeline OCR factures (n8n + Claude Vision → `invoices_staging`, relecture/validation avant écriture dans `invoices`/`expenses`)
 - S6 : module Groom (paiement par visite, max 1 visite/jour, compteurs mensuels, workflow "marquer soldé")
 - Notifications push via Firebase FCM
 - Ingestion WhatsApp pour saisie terrain (phase 2)
