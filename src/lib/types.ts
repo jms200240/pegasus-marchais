@@ -124,6 +124,41 @@ export interface Veterinaire {
   created_at: string
 }
 
+// Schema créé en amont (Sprint 5), pas encore de code applicatif dessus.
+// Colonnes confirmées via PostgREST ; nullabilité et valeurs d'enum réelles
+// (status, ocr_status, intervenant_type) non vérifiées — à confirmer avant usage.
+export interface Invoice {
+  id: string
+  invoice_date: string
+  intervenant_type: string | null
+  total_ttc: number
+  photo_url: string | null
+  status: string
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface InvoiceStaging {
+  id: string
+  invoice_id: string | null
+  raw_json: unknown
+  lines_json: unknown
+  ocr_status: string | null
+  created_at: string
+}
+
+export interface Expense {
+  id: string
+  horse_id: string | null
+  expense_date: string
+  intervenant_type: string | null
+  amount_ttc: number
+  invoice_id: string | null
+  note: string | null
+  created_at: string
+}
+
 // Ordre canonique des chevaux actifs (codé en dur, côté frontend)
 export const CANONICAL_ORDER = [
   'Échalote',

@@ -40,7 +40,7 @@ Opérationnel en production (`pegasus-marchais.vercel.app`) :
 - VaccineReminders (regroupement collapsible, exclusions permanentes, calcul temps réel)
 - 121 lignes d'historique de vaccination importées en Supabase
 
-Tables Supabase existantes : `health_events`, `health_event_visits`, `farm_alerts`, `ambiance_photos`, `photo_tags`, `vaccinations`, `vaccine_exclusions`, `veterinaires`.
+Tables Supabase existantes : `health_events`, `health_event_visits`, `farm_alerts`, `ambiance_photos`, `photo_tags`, `vaccinations`, `vaccine_exclusions`, `veterinaires`, `invoices`, `invoices_staging`, `expenses` (schema créé en amont, aucun code applicatif ne les utilise encore — RLS confirmé (policy Famille = ALL, pas d'accès Groom)).
 
 Restant à faire sur les workflows Visite pro : Vaccin, Soin véto, placeholders Maréchal-ferrant/Ostéopathe/Dentiste.
 
