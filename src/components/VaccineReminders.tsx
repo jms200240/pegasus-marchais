@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { ChevronDown, ChevronUp, Syringe, X, CheckCircle2 } from 'lucide-react'
 import type { Horse, Vaccination } from '../lib/types'
+import VaccinFiches from './VaccinFiches'
 
 type VaccineKey = 'Grippe' | 'Tetanos' | 'Rhino' | 'Rage'
 type VaccineDbType = 'grippe' | 'tetanos' | 'rhino' | 'rage'
@@ -64,6 +65,7 @@ export default function VaccineReminders() {
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<VaccineKey | null>(null)
   const [confirmTarget, setConfirmTarget] = useState<{ horse: Horse; vaccine: VaccineKey } | null>(null)
+  const [fichesOpen, setFichesOpen] = useState(false)
 
   async function fetchData() {
     setLoading(true)
@@ -129,8 +131,8 @@ export default function VaccineReminders() {
         </div>
         <button
           type="button"
-          className="text-[10px] text-gray-400 underline underline-offset-2 cursor-not-allowed"
-          title="Fiches vaccins — bientôt disponible"
+          onClick={() => setFichesOpen(true)}
+          className="text-[10px] text-gray-400 underline underline-offset-2 cursor-pointer hover:text-gray-600 transition-colors"
         >
           Voir les fiches Vaccins
         </button>
@@ -241,6 +243,9 @@ export default function VaccineReminders() {
           </div>
         </div>
       )}
+
+      {/* ── Fiches Vaccins ── */}
+      {fichesOpen && <VaccinFiches onClose={() => setFichesOpen(false)} />}
     </section>
   )
 }
