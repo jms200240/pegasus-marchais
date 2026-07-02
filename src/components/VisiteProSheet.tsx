@@ -6,6 +6,7 @@ import { X, ChevronDown, ChevronUp, Plus, CheckCircle, Camera, Stethoscope, Anvi
 import { getBoboTitle, VisitModal } from './BoboCard'
 import BoboWizard from './BoboWizard'
 import VeterinairePicker from './VeterinairePicker'
+import VaccinSheet from './VaccinSheet'
 
 // ─── Icône dent (absente de lucide-react — tracé Tabler Icons, licence MIT) ──
 function ToothIcon({ className = 'w-6 h-6' }: { className?: string }) {
@@ -79,6 +80,9 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
   // ── Vétérinaire présent ──────────────────────────────────────────────────
   const [vetName, setVetName] = useState<string | null>(null)
   const [vetPickerOpen, setVetPickerOpen] = useState(false)
+
+  // ── Vaccin ────────────────────────────────────────────────────────────────
+  const [vaccinSheetOpen, setVaccinSheetOpen] = useState(false)
 
   // ── Bobos actifs ─────────────────────────────────────────────────────────
   const [bobos, setBobos] = useState<ActiveBobo[]>([])
@@ -577,9 +581,10 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
                 )}
               </section>
 
-              {/* ── Bouton vaccin (câblage au step suivant) ── */}
+              {/* ── Bouton vaccin ── */}
               <button
                 type="button"
+                onClick={() => setVaccinSheetOpen(true)}
                 className="w-full flex items-center justify-center gap-2 font-bold text-sm py-3 rounded-xl border-2 border-gray-200 bg-white text-gray-600 cursor-pointer hover:border-primary/40 transition-all"
               >
                 Vaccin
@@ -675,6 +680,17 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
         <VeterinairePicker
           onSelect={nom => { setVetName(nom); setVetPickerOpen(false) }}
           onClose={() => setVetPickerOpen(false)}
+        />
+      )}
+
+      {/* ── VaccinSheet ── */}
+      {vaccinSheetOpen && (
+        <VaccinSheet
+          horses={horses}
+          defaultDate={visitedAt.slice(0, 10)}
+          defaultVeterinarian={vetName}
+          onClose={() => setVaccinSheetOpen(false)}
+          onSaved={() => {}}
         />
       )}
     </>
