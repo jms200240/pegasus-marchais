@@ -2,6 +2,15 @@ import { useEffect, useState } from 'react'
 import { X, Plus, Loader2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Marechal } from '../lib/types'
+import maelleDubost from '../assets/marechaux/maelle-dubost.jpg'
+import albanKervella from '../assets/marechaux/alban-kervella.jpg'
+
+// Photos statiques pour les maréchaux historiques (rang 1-2) — zéro latence.
+// Les maréchaux ajoutés ensuite (rang >= 3) n'ont pas de photo, juste un avatar initiales.
+const STATIC_PHOTOS: Record<number, string> = {
+  1: maelleDubost,
+  2: albanKervella,
+}
 
 function getInitiales(nom: string): string {
   const mots = nom.split(' ').filter(Boolean)
@@ -77,7 +86,9 @@ export default function MarechalPicker({ onSelect, onClose }: MarechalPickerProp
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-3">
-              {marechaux.map(marechal => (
+              {marechaux.map(marechal => {
+                const photo = STATIC_PHOTOS[marechal.rang] ?? marechal.photo_url
+                return (
                 <button
                   key={marechal.id}
                   type="button"
@@ -85,8 +96,8 @@ export default function MarechalPicker({ onSelect, onClose }: MarechalPickerProp
                   className="flex flex-col items-center gap-1.5 cursor-pointer group"
                 >
                   <div className="w-full aspect-square rounded-full overflow-hidden border-2 border-transparent group-hover:border-green-300 group-active:scale-95 transition-all bg-white shadow-xs flex items-center justify-center">
-                    {marechal.photo_url ? (
-                      <img src={marechal.photo_url} alt={marechal.nom} className="w-full h-full object-cover" />
+                    {photo ? (
+                      <img src={photo} alt={marechal.nom} className="w-full h-full object-cover" />
                     ) : (
                       <span className="text-sm font-black" style={{ color: '#2f6b3f' }}>
                         {getInitiales(marechal.nom)}
@@ -97,7 +108,8 @@ export default function MarechalPicker({ onSelect, onClose }: MarechalPickerProp
                     {marechal.nom}
                   </span>
                 </button>
-              ))}
+                )
+              })}
 
               {/* Vignette "+" ajouter un maréchal-ferrant */}
               <button
