@@ -152,7 +152,7 @@ export function VisitModal({
 
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40 backdrop-blur-sm">
-      <div className="w-full max-w-md bg-white rounded-t-3xl max-h-[85vh] flex flex-col overflow-hidden">
+      <div className="w-full max-w-md bg-white rounded-t-3xl max-h-[85vh] flex flex-col overflow-hidden mb-[calc(1rem+64px+env(safe-area-inset-bottom))]">
         {/* En-tête fixe */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3 flex-shrink-0">
           <h3 className="text-base font-bold text-gray-800">Ajouter un suivi</h3>
