@@ -1,17 +1,15 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { ChevronDown, ChevronUp, Syringe, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, Syringe, X, CheckCircle2 } from 'lucide-react'
 import type { Horse } from '../lib/types'
 
 type VaccineKey = 'Grippe' | 'Tetanos' | 'Rhino' | 'Rage'
+type VaccineDbType = 'grippe' | 'tetanos' | 'rhino' | 'rage'
 
 interface VaccinationRow {
   horse_id: string
   injection_date: string
-  flag_grippe: boolean
-  flag_tetanos: boolean
-  flag_rhino: boolean
-  flag_rage: boolean
+  vaccine_type: VaccineDbType
 }
 
 interface ExclusionRow {
@@ -29,11 +27,11 @@ interface HorseStatus {
   daysLeft: number | null
 }
 
-const VACCINES: { key: VaccineKey; label: string; flagKey: keyof VaccinationRow; cadence: number; alertWindow: number; tolerance: number }[] = [
-  { key: 'Grippe', label: 'Grippe', flagKey: 'flag_grippe', cadence: 365, alertWindow: 60, tolerance: 180 },
-  { key: 'Tetanos', label: 'Tétanos', flagKey: 'flag_tetanos', cadence: 365, alertWindow: 60, tolerance: 180 },
-  { key: 'Rhino', label: 'Rhinopneumonie', flagKey: 'flag_rhino', cadence: 180, alertWindow: 30, tolerance: 180 },
-  { key: 'Rage', label: 'Rage', flagKey: 'flag_rage', cadence: 365, alertWindow: 60, tolerance: 180 },
+const VACCINES: { key: VaccineKey; label: string; dbType: VaccineDbType; cadence: number; alertWindow: number; tolerance: number }[] = [
+  { key: 'Grippe', label: 'Grippe', dbType: 'grippe', cadence: 365, alertWindow: 60, tolerance: 180 },
+  { key: 'Tetanos', label: 'Tétanos', dbType: 'tetanos', cadence: 365, alertWindow: 60, tolerance: 180 },
+  { key: 'Rhino', label: 'Rhinopneumonie', dbType: 'rhino', cadence: 180, alertWindow: 30, tolerance: 180 },
+  { key: 'Rage', label: 'Rage', dbType: 'rage', cadence: 365, alertWindow: 60, tolerance: 180 },
 ]
 
 const STATUS_STYLE: Record<Status, { label: string; bg: string; text: string }> = {
@@ -73,11 +71,14 @@ export default function VaccineReminders() {
 
   async function fetchData() {
     setLoading(true)
-    const [{ data: horsesData }, { data: vaccData }, { data: exclData }] = await Promise.all([
+    const [{ data: horsesData, error: horsesErr }, { data: vaccData, error: vaccErr }, { data: exclData, error: exclErr }] = await Promise.all([
       supabase.from('horses').select('*').eq('is_active', true),
-      supabase.from('vaccinations').select('horse_id, injection_date, flag_grippe, flag_tetanos, flag_rhino, flag_rage'),
+      supabase.from('vaccinations').select('horse_id, injection_date, vaccine_type'),
       supabase.from('vaccine_exclusions').select('horse_id, vaccine').eq('excluded', true),
     ])
+    if (horsesErr) console.error('Erreur chargement chevaux (vaccins):', horsesErr)
+    if (vaccErr) console.error('Erreur chargement vaccinations:', vaccErr)
+    if (exclErr) console.error('Erreur chargement exclusions vaccins:', exclErr)
     setHorses((horsesData as Horse[]) ?? [])
     setVaccinations((vaccData as VaccinationRow[]) ?? [])
     setExclusions((exclData as ExclusionRow[]) ?? [])
@@ -94,7 +95,7 @@ export default function VaccineReminders() {
     return horses
       .filter(h => !isExcluded(h.id, vaccine.key))
       .map(h => {
-        const rows = vaccinations.filter(v => v.horse_id === h.id && v[vaccine.flagKey])
+        const rows = vaccinations.filter(v => v.horse_id === h.id && v.vaccine_type === vaccine.dbType)
         const lastInjection = rows.length > 0
           ? rows.reduce((max, r) => (r.injection_date > max ? r.injection_date : max), rows[0].injection_date)
           : null
@@ -115,6 +116,14 @@ export default function VaccineReminders() {
 
   if (loading) return null
 
+  // ── Précalcul par vaccin, pour savoir si tout est à jour ──
+  const perVaccine = VACCINES.map(vaccine => {
+    const statuses = getHorseStatuses(vaccine)
+    const concerned = statuses.filter(s => s.status !== 'a_jour' && s.status !== 'non_suivi')
+    return { vaccine, statuses, concerned }
+  })
+  const totalConcerned = perVaccine.reduce((sum, v) => sum + v.concerned.length, 0)
+
   return (
     <section className="mb-6">
       <div className="flex items-center justify-between mb-3">
@@ -131,74 +140,79 @@ export default function VaccineReminders() {
         </button>
       </div>
 
-      <div className="space-y-2">
-        {VACCINES.map(vaccine => {
-          const statuses = getHorseStatuses(vaccine)
-          const concerned = statuses.filter(s => s.status !== 'a_jour' && s.status !== 'non_suivi')
-          if (concerned.length === 0) return null
+      {totalConcerned === 0 ? (
+        <div className="flex items-center gap-2.5 bg-white rounded-xl px-4 py-3 shadow-xs">
+          <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: '#2f6b3f' }} />
+          <span className="text-sm font-semibold text-gray-700">Vaccins à jour</span>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {perVaccine.map(({ vaccine, concerned }) => {
+            if (concerned.length === 0) return null
 
-          const worst = concerned.some(s => s.status === 'primo_a_refaire')
-            ? 'primo_a_refaire'
-            : concerned.some(s => s.status === 'en_retard')
-            ? 'en_retard'
-            : 'a_prevoir'
+            const worst = concerned.some(s => s.status === 'primo_a_refaire')
+              ? 'primo_a_refaire'
+              : concerned.some(s => s.status === 'en_retard')
+              ? 'en_retard'
+              : 'a_prevoir'
 
-          const earliestDue = concerned
-            .map(s => s.nextDue)
-            .filter((d): d is string => !!d)
-            .sort()[0]
+            const earliestDue = concerned
+              .map(s => s.nextDue)
+              .filter((d): d is string => !!d)
+              .sort()[0]
 
-          const isOpen = expanded === vaccine.key
-          const allActive = concerned.length === horses.length
+            const isOpen = expanded === vaccine.key
+            const allActive = concerned.length === horses.length
 
-          return (
-            <div key={vaccine.key} className="bg-white rounded-xl shadow-xs overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setExpanded(isOpen ? null : vaccine.key)}
-                className="w-full flex items-center justify-between px-4 py-3 cursor-pointer"
-              >
-                <div className="flex items-center gap-2.5">
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_STYLE[worst].bg} ${STATUS_STYLE[worst].text}`}>
-                    {STATUS_STYLE[worst].label}
-                  </span>
-                  <span className="text-sm font-semibold text-gray-800">{vaccine.label}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-gray-400">
-                    {allActive ? 'Tous les chevaux' : `${concerned.length}/${horses.length} chevaux`}
-                    {earliestDue ? ` · éch. ${new Date(earliestDue).toLocaleDateString('fr-FR')}` : ''}
-                  </span>
-                  {isOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
-                </div>
-              </button>
+            return (
+              <div key={vaccine.key} className="bg-white rounded-xl shadow-xs overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setExpanded(isOpen ? null : vaccine.key)}
+                  className="w-full flex items-center justify-between px-4 py-3 cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_STYLE[worst].bg} ${STATUS_STYLE[worst].text}`}>
+                      {STATUS_STYLE[worst].label}
+                    </span>
+                    <span className="text-sm font-semibold text-gray-800">{vaccine.label}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-gray-400">
+                      {allActive ? 'Tous les chevaux' : `${concerned.length}/${horses.length} chevaux`}
+                      {earliestDue ? ` · éch. ${new Date(earliestDue).toLocaleDateString('fr-FR')}` : ''}
+                    </span>
+                    {isOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                  </div>
+                </button>
 
-              {isOpen && (
-                <div className="border-t border-gray-100 divide-y divide-gray-50">
-                  {concerned.map(s => (
-                    <div key={s.horse.id} className="flex items-center justify-between px-4 py-2.5">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: s.horse.color_hex ?? undefined }} />
-                        <span className="text-sm text-gray-700">{s.horse.name}</span>
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${STATUS_STYLE[s.status].bg} ${STATUS_STYLE[s.status].text}`}>
-                          {STATUS_STYLE[s.status].label}
-                        </span>
+                {isOpen && (
+                  <div className="border-t border-gray-100 divide-y divide-gray-50">
+                    {concerned.map(s => (
+                      <div key={s.horse.id} className="flex items-center justify-between px-4 py-2.5">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: s.horse.color_hex ?? undefined }} />
+                          <span className="text-sm text-gray-700">{s.horse.name}</span>
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${STATUS_STYLE[s.status].bg} ${STATUS_STYLE[s.status].text}`}>
+                            {STATUS_STYLE[s.status].label}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmTarget({ horse: s.horse, vaccine: vaccine.key })}
+                          className="text-[10px] font-bold text-gray-400 hover:text-red-600 uppercase tracking-wide cursor-pointer"
+                        >
+                          Annuler le rappel
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setConfirmTarget({ horse: s.horse, vaccine: vaccine.key })}
-                        className="text-[10px] font-bold text-gray-400 hover:text-red-600 uppercase tracking-wide cursor-pointer"
-                      >
-                        Annuler le rappel
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* ── Popup confirmation annulation ── */}
       {confirmTarget && (
