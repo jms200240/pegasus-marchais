@@ -1,16 +1,12 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { ChevronDown, ChevronUp, Syringe, X, CheckCircle2 } from 'lucide-react'
-import type { Horse } from '../lib/types'
+import type { Horse, Vaccination } from '../lib/types'
 
 type VaccineKey = 'Grippe' | 'Tetanos' | 'Rhino' | 'Rage'
 type VaccineDbType = 'grippe' | 'tetanos' | 'rhino' | 'rage'
 
-interface VaccinationRow {
-  horse_id: string
-  injection_date: string
-  vaccine_type: VaccineDbType
-}
+type VaccinationRow = Pick<Vaccination, 'horse_id' | 'injection_date' | 'vaccine_type'>
 
 interface ExclusionRow {
   horse_id: string

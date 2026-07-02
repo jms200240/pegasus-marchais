@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { X, Plus, Loader2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import type { Veterinaire } from '../lib/types'
 import drFredericAuge from '../assets/veterinaires/dr-frederic-auge.jpg'
 import drAndreaMichoux from '../assets/veterinaires/dr-andrea-michoux.jpg'
 import drMartinVellard from '../assets/veterinaires/dr-martin-vellard.jpg'
@@ -27,13 +28,6 @@ const STATIC_PHOTOS: Record<number, string> = {
   10: drHermineScalbert,
 }
 
-interface VeterinaireRow {
-  id: string
-  rang: number
-  nom: string
-  photo_url: string | null
-}
-
 function getInitiales(nom: string): string {
   const mots = nom.replace(/^Dr\.?\s*/i, '').split(' ').filter(Boolean)
   return mots.map(m => m[0]).join('').toUpperCase().slice(0, 2)
@@ -45,7 +39,7 @@ interface VeterinairePickerProps {
 }
 
 export default function VeterinairePicker({ onSelect, onClose }: VeterinairePickerProps) {
-  const [vets, setVets] = useState<VeterinaireRow[]>([])
+  const [vets, setVets] = useState<Veterinaire[]>([])
   const [loading, setLoading] = useState(true)
   const [addOpen, setAddOpen] = useState(false)
   const [newNom, setNewNom] = useState('')
@@ -58,7 +52,7 @@ export default function VeterinairePicker({ onSelect, onClose }: VeterinairePick
       .from('veterinaires')
       .select('*')
       .order('rang', { ascending: true })
-    setVets((data as VeterinaireRow[]) ?? [])
+    setVets((data as Veterinaire[]) ?? [])
     setLoading(false)
   }
 

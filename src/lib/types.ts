@@ -106,6 +106,24 @@ export interface Pathology {
   created_at: string
 }
 
+export interface Vaccination {
+  id: string
+  horse_id: string
+  vaccine_type: 'grippe' | 'tetanos' | 'rhino' | 'rage'
+  injection_date: string         // yyyy-mm-dd
+  location: string | null
+  veterinarian: string | null
+  created_at: string
+}
+
+export interface Veterinaire {
+  id: string
+  rang: number
+  nom: string
+  photo_url: string | null
+  created_at: string
+}
+
 // Ordre canonique des chevaux actifs (codé en dur, côté frontend)
 export const CANONICAL_ORDER = [
   'Échalote',
