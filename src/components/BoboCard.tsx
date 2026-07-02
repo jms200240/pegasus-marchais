@@ -152,9 +152,10 @@ export function VisitModal({
 
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40 backdrop-blur-sm">
-      <div className="w-full max-w-md bg-white rounded-t-3xl p-5 max-h-[85vh] overflow-y-auto no-scrollbar space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold text-gray-800">Ajouter un suivi</h3>
+      <div className="w-full max-w-md bg-white rounded-t-3xl max-h-[85vh] flex flex-col overflow-hidden">
+        {/* En-tête fixe */}
+        <div className="flex items-center justify-between px-5 pt-5 pb-3 flex-shrink-0">
+          <h3 className="text-base font-bold text-gray-800">Ajouter un suivi</h3>
           <button
             type="button"
             onClick={onClose}
@@ -164,10 +165,11 @@ export function VisitModal({
           </button>
         </div>
 
-        <div className="space-y-3">
+        {/* Contenu — seule cette zone défile */}
+        <div className="px-5 space-y-3 overflow-y-auto no-scrollbar flex-1 min-h-0">
           {/* Note */}
           <div>
-            <label className="text-xs font-semibold text-gray-500 block mb-1.5">
+            <label className="text-sm font-semibold text-gray-500 block mb-1.5">
               Que constatez-vous aujourd'hui ?
             </label>
             <textarea
@@ -175,13 +177,13 @@ export function VisitModal({
               onChange={e => setNote(e.target.value)}
               rows={3}
               placeholder="Note de suivi, soins appliqués, évolution..."
-              className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none text-gray-700"
+              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none text-gray-700"
             />
           </div>
 
           {/* Gravité */}
           <div>
-            <label className="text-xs font-semibold text-gray-500 block mb-1.5">
+            <label className="text-sm font-semibold text-gray-500 block mb-1.5">
               Gravité
             </label>
             <StarPicker value={severity} onChange={setSeverity} />
@@ -189,7 +191,7 @@ export function VisitModal({
 
           {/* Photos */}
           <div>
-            <label className="text-xs font-semibold text-gray-500 block mb-1.5">
+            <label className="text-sm font-semibold text-gray-500 block mb-1.5">
               Photos <span className="font-normal text-gray-400">(optionnel)</span>
             </label>
             <div className="flex flex-wrap gap-2">
@@ -227,29 +229,30 @@ export function VisitModal({
           </div>
 
           {error && (
-            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
               {error}
             </p>
           )}
+        </div>
 
-          <div className="flex gap-2.5 pt-2">
-            <button
-              type="button"
-              onClick={() => handleSave('active')}
-              disabled={submitting}
-              className="flex-1 bg-amber-500 text-white font-bold text-xs py-2.5 rounded-xl shadow-xs active:scale-[0.98] transition-transform cursor-pointer disabled:opacity-50"
-            >
-              {submitting ? 'Enregistrement…' : 'Enregistrer · En cours'}
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSave('closed')}
-              disabled={submitting}
-              className="flex-1 bg-green-600 text-white font-bold text-xs py-2.5 rounded-xl shadow-xs active:scale-[0.98] transition-transform cursor-pointer disabled:opacity-50"
-            >
-              {submitting ? '…' : 'Enregistrer · Résolu'}
-            </button>
-          </div>
+        {/* Pied fixe : boutons toujours visibles, sans avoir à tirer vers le bas */}
+        <div className="flex gap-2.5 px-5 pt-3 pb-5 flex-shrink-0 border-t border-gray-100">
+          <button
+            type="button"
+            onClick={() => handleSave('active')}
+            disabled={submitting}
+            className="flex-1 bg-amber-500 text-white font-bold text-sm py-2.5 rounded-xl shadow-xs active:scale-[0.98] transition-transform cursor-pointer disabled:opacity-50"
+          >
+            {submitting ? 'Enregistrement…' : 'Enregistrer · En cours'}
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSave('closed')}
+            disabled={submitting}
+            className="flex-1 bg-green-600 text-white font-bold text-sm py-2.5 rounded-xl shadow-xs active:scale-[0.98] transition-transform cursor-pointer disabled:opacity-50"
+          >
+            {submitting ? '…' : 'Enregistrer · Résolu'}
+          </button>
         </div>
       </div>
     </div>
