@@ -64,6 +64,7 @@ Opérationnel en production (`pegasus-marchais.vercel.app`) :
   - **Bobos** : le reste (liés à une pathologie, ou notes libres "Autre" sans type métier)
 - FicheCheval : en-tête photo/nom en layout côte-à-côte (photo agrandie à gauche, nom/race/badge à droite) au lieu d'empilé centré — cadre coloré d'en-tête conservé à taille quasi identique (~1/3 écran) ; nom en police réduite au-delà de 10 caractères pour éviter la troncature
 - VaccinHistorySheet : quand un vaccin précis est filtré (pas "Tous"), le nom du vaccin n'est plus répété sur chaque ligne (déjà induit par le filtre) — seulement Dr / lieu (normal) / date (gras)
+- Généalogie complète : 29 individus en base (7 actifs + 22 "cavalerie historique", `horses.is_active=false`), importés depuis l'organigramme/fichier généalogique fournis par l'utilisateur. Chaîne multi-génération résolue via `pere_id`/`mere_id`/`pdm_id` chaque fois que l'ancêtre est aussi dans notre cavalerie (ex. Cerise 1977 → Pomme → Kwetsche → Échalote/Hakéa/Pamplemousse), sinon texte libre (ancêtres externes). Liens IFCE réels sur les 15 individus qui en ont une. FicheCheval : "Père de mère" est désormais cliquable comme Père/Mère (résolution via `pdm_id`) — la fiche existante sert de vue généalogie interactive (navigation de proche en proche), pas de nouvel écran dédié. `Chevaux.tsx` "Cavalerie historique" (déjà présente) affiche automatiquement les 22. `types.ts` `Horse`/`Genealogy` alignés sur le schéma réel (colonnes `sex`, `died_at`, `naisseur`, `adresse_elevage`, `generation`, `pdm_id`, `pere_url`/`mere_url`/`pdm_url` existaient déjà en base mais absentes du type)
 
 Tables Supabase existantes : `health_events`, `health_event_visits`, `farm_alerts`, `ambiance_photos`, `photo_tags`, `vaccinations`, `vaccine_exclusions`, `veterinaires`, `marechaux`, `osteopathes`, `dentistes`, `soin_reminders`, `invoices`, `invoices_staging`, `expenses` (RLS confirmé : Famille = ALL, Groom = aucun accès). `invoices`/`expenses` utilisées par l'écran Finances ; `invoices_staging` toujours sans code applicatif (réservée au pipeline OCR).
 
@@ -73,7 +74,6 @@ Tables Supabase existantes : `health_events`, `health_event_visits`, `farm_alert
 - S6 : module Groom (paiement par visite, max 1 visite/jour, compteurs mensuels, workflow "marquer soldé")
 - Notifications push via Firebase FCM
 - Ingestion WhatsApp pour saisie terrain (phase 2)
-- Arbre généalogique interactif (structure TREE_SEED, 5 générations)
 - Migration logique rappels vaccins depuis Excel vers Supabase/app
 
 ## Outils
