@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import type { Horse, Genealogy, HealthEvent, Pathology } from '../lib/types'
+import type { Horse, Genealogy, HealthEvent, Pathology, Vaccination } from '../lib/types'
 import { HORSE_COLORS, formatDate } from '../lib/types'
 import { HORSE_PHOTOS } from '../lib/horsePhotos'
+import { VACCINES, computeStatus } from '../lib/vaccineUtils'
 import {
-  ArrowLeft, ExternalLink, Calendar, Award,
-  AlertCircle, CheckCircle, User
+  ArrowLeft, ExternalLink, Award,
+  AlertCircle, CheckCircle, User, Syringe, Wrench,
+  ChevronDown, ChevronUp
 } from 'lucide-react'
 import BoboCard from '../components/BoboCard'
+import VaccinHistorySheet from '../components/VaccinHistorySheet'
 
 interface FicheChevalProps {
   horseId: string
@@ -48,15 +51,61 @@ function SectionTitle({ icon: Icon, title }: { icon: React.ElementType; title: s
   )
 }
 
+// ─── Section pliable, avec compteur et flèche ─────────────────────────
+function CollapsibleSection({
+  icon: Icon,
+  title,
+  count,
+  open,
+  onToggle,
+  children,
+}: {
+  icon: React.ElementType
+  title: string
+  count: number
+  open: boolean
+  onToggle: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <div className="mt-5">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center justify-between gap-2 mb-3 cursor-pointer"
+      >
+        <div className="flex items-center gap-2">
+          <Icon className="w-3.5 h-3.5 text-primary" />
+          <h2 className="text-xs font-bold text-gray-700 uppercase tracking-wider">{title}</h2>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] font-bold text-gray-400 bg-gray-100 rounded-full px-2 py-0.5">
+            {count}
+          </span>
+          {open ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+        </div>
+      </button>
+      {open && children}
+    </div>
+  )
+}
+
 // ─── Page principale ──────────────────────────────────────────────────
 export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChevalProps) {
   const [horse, setHorse] = useState<Horse | null>(null)
   const [genealogy, setGenealogy] = useState<Genealogy | null>(null)
   const [healthEvents, setHealthEvents] = useState<HealthEvent[]>([])
+  const [vaccinations, setVaccinations] = useState<Vaccination[]>([])
   const [allHorses, setAllHorses] = useState<Pick<Horse, 'id' | 'name' | 'color_hex' | 'is_active'>[]>([])
   const [pathologies, setPathologies] = useState<Pathology[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // ── Sections pliables ──────────────────────────────────────────────
+  const [vaccinsOpen, setVaccinsOpen] = useState(false)
+  const [soinsOpen, setSoinsOpen] = useState(false)
+  const [bobosOpen, setBobosOpen] = useState(false)
+  const [vaccinHistoryOpen, setVaccinHistoryOpen] = useState(false)
 
   useEffect(() => {
     async function fetchData() {
@@ -67,11 +116,13 @@ export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChe
         const [{ data: horseData, error: horseErr },
                { data: geneData, error: geneErr },
                { data: eventsData, error: eventsErr },
+               { data: vaccData, error: vaccErr },
                { data: horsesAll, error: horsesAllErr },
                { data: pathoData, error: pathoErr }] = await Promise.all([
           supabase.from('horses').select('*').eq('id', horseId).single(),
           supabase.from('genealogy').select('*').eq('horse_id', horseId).maybeSingle(),
           supabase.from('health_events').select('*').eq('horse_id', horseId).order('opened_at', { ascending: false }),
+          supabase.from('vaccinations').select('*').eq('horse_id', horseId),
           supabase.from('horses').select('id, name, color_hex, is_active'),
           supabase.from('pathologies').select('*'),
         ])
@@ -79,12 +130,14 @@ export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChe
         if (horseErr) throw horseErr
         if (geneErr) throw geneErr
         if (eventsErr) throw eventsErr
+        if (vaccErr) throw vaccErr
         if (horsesAllErr) throw horsesAllErr
         if (pathoErr) throw pathoErr
 
         setHorse(horseData)
         setGenealogy(geneData ?? null)
         setHealthEvents(eventsData ?? [])
+        setVaccinations(vaccData ?? [])
         setAllHorses(horsesAll ?? [])
         setPathologies(pathoData ?? [])
       } catch (err: unknown) {
@@ -125,6 +178,27 @@ export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChe
 
   const color = horse.color_hex ?? HORSE_COLORS[horse.name] ?? '#2f6b3f'
   const activeEventCount = healthEvents.filter(e => e.status !== 'closed').length
+
+  // Soins = interventions pro (Véto/Maréchal/Ostéo/Dentiste) sans pathologie liée —
+  // exclut les bobos "Autre" (BoboWizard, note libre) qui n'ont pas de type métier.
+  const METIERS_SOIN: (HealthEvent['type'])[] = ['veterinaire', 'marechal', 'osteo', 'dentiste']
+  const soins = healthEvents.filter(e => !e.pathology_id && METIERS_SOIN.includes(e.type))
+  const bobos = healthEvents.filter(e => !soins.includes(e))
+
+  // Prochains rappels vaccins pour ce cheval (vaccins jamais administrés exclus)
+  const vaccinReminders = VACCINES
+    .map(vaccine => {
+      const rows = vaccinations.filter(v => v.vaccine_type === vaccine.dbType)
+      const lastRow = rows.length > 0
+        ? rows.reduce((max, r) => (r.injection_date > max.injection_date ? r : max), rows[0])
+        : null
+      if (!lastRow) return null
+      const { nextDue } = computeStatus(lastRow.injection_date, vaccine.cadence, vaccine.alertWindow, vaccine.tolerance)
+      if (!nextDue) return null
+      return { label: vaccine.label, nextDue }
+    })
+    .filter((r): r is { label: string; nextDue: string } => !!r)
+    .sort((a, b) => a.nextDue.localeCompare(b.nextDue))
 
   // Calcul de l'âge depuis born_at
   const age = horse.born_at
@@ -252,38 +326,123 @@ export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChe
           </>
         )}
 
-        {/* Historique bobos */}
-        <SectionTitle icon={Calendar} title="Historique médical" />
-        {healthEvents.length === 0 ? (
-          <div className="bg-white rounded-xl p-5 shadow-xs text-center">
-            <CheckCircle className="w-8 h-8 text-green-400 mx-auto mb-2" />
-            <p className="text-sm font-semibold text-gray-700">Aucun événement médical</p>
-            <p className="text-xs text-gray-400 mt-0.5">Ce cheval n'a aucun antécédent enregistré.</p>
-          </div>
-        ) : (
+        {/* ── Vaccins ── */}
+        <CollapsibleSection
+          icon={Syringe}
+          title="Vaccins"
+          count={vaccinReminders.length}
+          open={vaccinsOpen}
+          onToggle={() => setVaccinsOpen(!vaccinsOpen)}
+        >
           <div className="space-y-2">
-            {healthEvents.map(event => (
-              <BoboCard
-                key={event.id}
-                event={event}
-                horse={horse}
-                pathology={pathById(event.pathology_id)}
-                showHorseBadge={false}
-                onUpdated={async () => {
-                  const { data, error } = await supabase
-                    .from('health_events')
-                    .select('*')
-                    .eq('horse_id', horseId)
-                    .order('opened_at', { ascending: false })
-                  if (!error && data) {
-                    setHealthEvents(data)
-                  }
-                }}
-              />
-            ))}
+            {vaccinReminders.length === 0 ? (
+              <div className="bg-white rounded-xl p-5 shadow-xs text-center">
+                <p className="text-sm font-semibold text-gray-700">Aucun rappel connu</p>
+              </div>
+            ) : (
+              vaccinReminders.map(r => (
+                <div key={r.label} className="bg-white rounded-xl shadow-xs px-4 py-3 flex items-center justify-between">
+                  <p className="text-sm font-bold text-gray-800">{r.label}</p>
+                  <p className="text-xs text-gray-500">
+                    avant le {new Date(r.nextDue + 'T00:00:00').toLocaleDateString('fr-FR')}
+                  </p>
+                </div>
+              ))
+            )}
+            <button
+              type="button"
+              onClick={() => setVaccinHistoryOpen(true)}
+              className="text-xs font-semibold text-primary underline underline-offset-2 cursor-pointer"
+            >
+              Historique complet
+            </button>
           </div>
-        )}
+        </CollapsibleSection>
+
+        {/* ── Soins (Véto / Maréchal / Ostéo / Dentiste, hors vaccins) ── */}
+        <CollapsibleSection
+          icon={Wrench}
+          title="Soins"
+          count={soins.length}
+          open={soinsOpen}
+          onToggle={() => setSoinsOpen(!soinsOpen)}
+        >
+          {soins.length === 0 ? (
+            <div className="bg-white rounded-xl p-5 shadow-xs text-center">
+              <p className="text-sm font-semibold text-gray-700">Aucun soin enregistré</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {soins.map(event => (
+                <BoboCard
+                  key={event.id}
+                  event={event}
+                  horse={horse}
+                  pathology={null}
+                  showHorseBadge={false}
+                  onUpdated={async () => {
+                    const { data, error } = await supabase
+                      .from('health_events')
+                      .select('*')
+                      .eq('horse_id', horseId)
+                      .order('opened_at', { ascending: false })
+                    if (!error && data) {
+                      setHealthEvents(data)
+                    }
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </CollapsibleSection>
+
+        {/* ── Bobos ── */}
+        <CollapsibleSection
+          icon={AlertCircle}
+          title="Bobos"
+          count={bobos.length}
+          open={bobosOpen}
+          onToggle={() => setBobosOpen(!bobosOpen)}
+        >
+          {bobos.length === 0 ? (
+            <div className="bg-white rounded-xl p-5 shadow-xs text-center">
+              <CheckCircle className="w-8 h-8 text-green-400 mx-auto mb-2" />
+              <p className="text-sm font-semibold text-gray-700">Aucun bobo enregistré</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {bobos.map(event => (
+                <BoboCard
+                  key={event.id}
+                  event={event}
+                  horse={horse}
+                  pathology={pathById(event.pathology_id)}
+                  showHorseBadge={false}
+                  onUpdated={async () => {
+                    const { data, error } = await supabase
+                      .from('health_events')
+                      .select('*')
+                      .eq('horse_id', horseId)
+                      .order('opened_at', { ascending: false })
+                    if (!error && data) {
+                      setHealthEvents(data)
+                    }
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </CollapsibleSection>
       </div>
+
+      {/* ── Historique vaccinal complet ── */}
+      {vaccinHistoryOpen && (
+        <VaccinHistorySheet
+          horseId={horseId}
+          horseName={horse.name}
+          onClose={() => setVaccinHistoryOpen(false)}
+        />
+      )}
     </div>
   )
 }

@@ -9,7 +9,9 @@ import BoboWizard from './BoboWizard'
 import VeterinairePicker from './VeterinairePicker'
 import MarechalPicker from './MarechalPicker'
 import OsteopathePicker from './OsteopathePicker'
+import DentistePicker from './DentistePicker'
 import VaccinSheet from './VaccinSheet'
+import SoinVetoSheet from './SoinVetoSheet'
 
 // ─── Icône dent (absente de lucide-react — tracé Tabler Icons, licence MIT) ──
 function ToothIcon({ className = 'w-6 h-6' }: { className?: string }) {
@@ -192,8 +194,22 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
   const [palpationSelected, setPalpationSelected] = useState<Set<string>>(new Set())
   const [palpationValidated, setPalpationValidated] = useState(false)
 
+  // ── Dentiste présent ──────────────────────────────────────────────────────
+  const [dentisteName, setDentisteName] = useState<string | null>(null)
+  const [dentistePickerOpen, setDentistePickerOpen] = useState(false)
+
+  // ── Soin dentiste (nivellement / extraction, en cascade) ──────────────────
+  const [soinDentisteOpen, setSoinDentisteOpen] = useState(false)
+  const [nivellementSelected, setNivellementSelected] = useState<Set<string>>(new Set())
+  const [nivellementValidated, setNivellementValidated] = useState(false)
+  const [extractionSelected, setExtractionSelected] = useState<Set<string>>(new Set())
+  const [extractionValidated, setExtractionValidated] = useState(false)
+
   // ── Vaccin ────────────────────────────────────────────────────────────────
   const [vaccinSheetOpen, setVaccinSheetOpen] = useState(false)
+
+  // ── Soin véto ─────────────────────────────────────────────────────────────
+  const [soinVetoOpen, setSoinVetoOpen] = useState(false)
 
   // ── Bobos actifs ─────────────────────────────────────────────────────────
   const [bobos, setBobos] = useState<ActiveBobo[]>([])
@@ -477,6 +493,7 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
   function currentIntervenantName(): string | null {
     if (metier === 'marechal') return marechalName
     if (metier === 'osteopathe') return osteopatheName
+    if (metier === 'dentiste') return dentisteName
     if (metier === 'veterinaire') return vetName
     return null
   }
@@ -529,6 +546,8 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
   const showFerrure4Step = parageValidated && ferrureAntValidated && remainingApresFerrureAnt.length > 0
 
   const remainingApresSeanceComplete = sortedHorses.filter(h => !seanceCompleteSelected.has(h.id))
+
+  const remainingApresNivellement = sortedHorses.filter(h => !nivellementSelected.has(h.id))
 
   const visitModalBobo = visitModalBoboId !== null
     ? bobos.find(b => b.event.id === visitModalBoboId) ?? null
@@ -795,9 +814,10 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
                 Vaccin
               </button>
 
-              {/* ── Bouton soin véto (câblage au step suivant) ── */}
+              {/* ── Bouton soin véto ── */}
               <button
                 type="button"
+                onClick={() => setSoinVetoOpen(true)}
                 className="w-full flex items-center justify-center gap-2 font-bold text-sm py-3 rounded-xl border-2 border-gray-200 bg-white text-gray-600 cursor-pointer hover:border-primary/40 transition-all"
               >
                 Soin véto
@@ -1047,21 +1067,85 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
             </>
           )}
 
-          {/* ── Placeholder Dentiste ── */}
+          {/* ── Dentiste ── */}
           {metier === 'dentiste' && (
-            <section className="bg-white rounded-xl p-5 text-center shadow-xs">
-              <p className="text-sm font-semibold text-gray-700">Bientôt disponible</p>
-              <p className="text-xs text-gray-400 mt-1">
-                Le workflow {METIER_LABELS[metier]} arrive dans une prochaine étape.
-              </p>
-              <button
-                type="button"
-                onClick={() => setMetier(null)}
-                className="mt-3 text-xs text-gray-400 underline underline-offset-2 cursor-pointer"
-              >
-                ← Changer d'intervenant
-              </button>
-            </section>
+            <>
+              <section>
+                <button
+                  type="button"
+                  onClick={() => setDentistePickerOpen(true)}
+                  className="w-full flex items-center justify-center gap-2 font-bold text-sm py-3 rounded-xl border-2 cursor-pointer transition-all"
+                  style={
+                    dentisteName
+                      ? { borderColor: '#bfe0c9', backgroundColor: '#f0fbf4', color: '#2f6b3f' }
+                      : { borderColor: '#e5e7eb', backgroundColor: 'white', color: '#4b5563' }
+                  }
+                >
+                  <ToothIcon className="w-4 h-4" />
+                  {dentisteName ?? 'Dentiste présent'}
+                </button>
+              </section>
+
+              {/* ── Soin dentiste (nivellement / extraction en cascade) ── */}
+              {!soinDentisteOpen ? (
+                <button
+                  type="button"
+                  onClick={() => setSoinDentisteOpen(true)}
+                  className="w-full flex items-center justify-center gap-2 font-bold text-sm py-3 rounded-xl border-2 border-gray-200 bg-white text-gray-600 cursor-pointer hover:border-primary/40 transition-all"
+                >
+                  Soin dentiste
+                </button>
+              ) : (
+                <section className="space-y-3">
+                  <SoinStepCard
+                    title="Nivellement"
+                    horses={sortedHorses}
+                    selected={nivellementSelected}
+                    validated={nivellementValidated}
+                    saving={soinSaving}
+                    onToggle={id => toggleInSet(setNivellementSelected, id)}
+                    onValidate={() =>
+                      validateSoinStep('Nivellement', Array.from(nivellementSelected), () => setNivellementValidated(true))
+                    }
+                  />
+
+                  {nivellementValidated && (
+                    <SoinStepCard
+                      title="Extraction"
+                      horses={remainingApresNivellement}
+                      selected={extractionSelected}
+                      validated={extractionValidated}
+                      saving={soinSaving}
+                      onToggle={id => toggleInSet(setExtractionSelected, id)}
+                      onValidate={() =>
+                        validateSoinStep('Extraction', Array.from(extractionSelected), () => setExtractionValidated(true))
+                      }
+                    />
+                  )}
+
+                  {soinError && (
+                    <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{soinError}</p>
+                  )}
+
+                  {nivellementValidated && extractionValidated && (
+                    <div className="flex items-center justify-center gap-1.5 text-sm font-bold" style={{ color: '#2f6b3f' }}>
+                      <Check className="w-4 h-4" />
+                      Soin dentiste réparti sur les 7 chevaux
+                    </div>
+                  )}
+                </section>
+              )}
+
+              <section className="text-center">
+                <button
+                  type="button"
+                  onClick={() => setMetier(null)}
+                  className="text-xs text-gray-400 underline underline-offset-2 cursor-pointer"
+                >
+                  ← Changer d'intervenant
+                </button>
+              </section>
+            </>
           )}
         </div>
       </div>
@@ -1115,6 +1199,14 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
         />
       )}
 
+      {/* ── DentistePicker ── */}
+      {dentistePickerOpen && (
+        <DentistePicker
+          onSelect={nom => { setDentisteName(nom); setDentistePickerOpen(false) }}
+          onClose={() => setDentistePickerOpen(false)}
+        />
+      )}
+
       {/* ── VaccinSheet ── */}
       {vaccinSheetOpen && (
         <VaccinSheet
@@ -1123,6 +1215,17 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
           defaultVeterinarian={vetName}
           onClose={() => setVaccinSheetOpen(false)}
           onSaved={() => {}}
+        />
+      )}
+
+      {/* ── SoinVetoSheet ── */}
+      {soinVetoOpen && (
+        <SoinVetoSheet
+          horses={horses}
+          defaultVisitedAt={fromDatetimeLocal(visitedAt)}
+          defaultVeterinarian={vetName}
+          onClose={() => setSoinVetoOpen(false)}
+          onSaved={fetchBobos}
         />
       )}
     </>

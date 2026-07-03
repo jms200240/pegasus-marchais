@@ -108,6 +108,18 @@ export interface Pathology {
   created_at: string
 }
 
+export interface SoinReminder {
+  id: string
+  created_at: string
+  visited_at: string             // horodatage du soin
+  soin: string                   // texte libre décrivant le soin
+  horse_ids: string[]            // chevaux concernés
+  comment: string | null
+  veterinarian: string | null
+  reminder_date: string          // yyyy-mm-dd — date cible du rappel
+  reminder_text: string          // texte du rappel
+}
+
 export interface Vaccination {
   id: string
   horse_id: string
@@ -135,6 +147,14 @@ export interface Marechal {
 }
 
 export interface Osteopathe {
+  id: string
+  rang: number
+  nom: string
+  photo_url: string | null
+  created_at: string
+}
+
+export interface Dentiste {
   id: string
   rang: number
   nom: string
