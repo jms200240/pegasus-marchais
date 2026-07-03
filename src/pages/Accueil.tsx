@@ -121,8 +121,8 @@ export default function Accueil() {
               <button
                 type="button"
                 onClick={() => setVisiteProOpen(true)}
-                className="w-full flex items-center justify-center gap-2 font-bold text-xs text-gray-500 border border-gray-200 bg-white rounded-xl active:scale-[0.98] transition-transform cursor-pointer"
-                style={{ minHeight: '40px' }}
+                className="w-full flex items-center justify-center gap-2 font-bold text-xs text-white rounded-xl shadow-sm active:scale-[0.98] transition-transform cursor-pointer"
+                style={{ backgroundColor: '#4A5FA0', minHeight: '40px' }}
               >
                 <Stethoscope className="w-4 h-4" />
                 Démarrer une visite pro
