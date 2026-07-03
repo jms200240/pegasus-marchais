@@ -7,6 +7,7 @@ import { getBoboTitle, VisitModal } from './BoboCard'
 import BoboWizard from './BoboWizard'
 import VeterinairePicker from './VeterinairePicker'
 import MarechalPicker from './MarechalPicker'
+import OsteopathePicker from './OsteopathePicker'
 import VaccinSheet from './VaccinSheet'
 
 // ─── Icône dent (absente de lucide-react — tracé Tabler Icons, licence MIT) ──
@@ -178,6 +179,17 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
   const [ferrure4Validated, setFerrure4Validated] = useState(false)
   const [soinSaving, setSoinSaving] = useState(false)
   const [soinError, setSoinError] = useState<string | null>(null)
+
+  // ── Ostéopathe présent ──────────────────────────────────────────────────
+  const [osteopatheName, setOsteopatheName] = useState<string | null>(null)
+  const [osteopathePickerOpen, setOsteopathePickerOpen] = useState(false)
+
+  // ── Soin ostéopathe (séance complète / palpation simple, en cascade) ──────
+  const [soinOsteopatheOpen, setSoinOsteopatheOpen] = useState(false)
+  const [seanceCompleteSelected, setSeanceCompleteSelected] = useState<Set<string>>(new Set())
+  const [seanceCompleteValidated, setSeanceCompleteValidated] = useState(false)
+  const [palpationSelected, setPalpationSelected] = useState<Set<string>>(new Set())
+  const [palpationValidated, setPalpationValidated] = useState(false)
 
   // ── Vaccin ────────────────────────────────────────────────────────────────
   const [vaccinSheetOpen, setVaccinSheetOpen] = useState(false)
@@ -433,17 +445,35 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
     })
   }
 
-  // ─── Persistance d'une étape de soin maréchal (health_events, source=Famille) ──
+  // ─── Persistance d'une étape de soin (health_events, source=Famille) ──────
+  // Réutilisé par tous les métiers en cascade (Maréchal-ferrant, Ostéopathe...).
+  const HEALTH_EVENT_TYPE_PAR_METIER: Record<Metier, 'veterinaire' | 'marechal' | 'osteo' | 'dentiste'> = {
+    veterinaire: 'veterinaire',
+    marechal: 'marechal',
+    osteopathe: 'osteo',
+    dentiste: 'dentiste',
+  }
+
+  function currentIntervenantName(): string | null {
+    if (metier === 'marechal') return marechalName
+    if (metier === 'osteopathe') return osteopatheName
+    if (metier === 'veterinaire') return vetName
+    return null
+  }
+
   async function validateSoinStep(label: string, horseIds: string[], markValidated: () => void) {
+    if (!metier) return
     setSoinSaving(true)
     setSoinError(null)
     try {
       if (horseIds.length > 0) {
         const visitedAtISO = fromDatetimeLocal(visitedAt)
-        const noteSuffix = marechalName ? ` (visite Maréchal-ferrant — ${marechalName})` : ' (visite Maréchal-ferrant)'
+        const metierLabel = METIER_LABELS[metier]
+        const intervenantName = currentIntervenantName()
+        const noteSuffix = intervenantName ? ` (visite ${metierLabel} — ${intervenantName})` : ` (visite ${metierLabel})`
         const rows = horseIds.map(horseId => ({
           horse_id: horseId,
-          type: 'marechal' as const,
+          type: HEALTH_EVENT_TYPE_PAR_METIER[metier],
           status: 'closed' as const,
           severity: 1,
           opened_at: visitedAtISO,
@@ -477,6 +507,8 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
   const remainingApresParage = sortedHorses.filter(h => !parageSelected.has(h.id))
   const remainingApresFerrureAnt = remainingApresParage.filter(h => !ferrureAntSelected.has(h.id))
   const showFerrure4Step = parageValidated && ferrureAntValidated && remainingApresFerrureAnt.length > 0
+
+  const remainingApresSeanceComplete = sortedHorses.filter(h => !seanceCompleteSelected.has(h.id))
 
   const visitModalBobo = visitModalBoboId !== null
     ? bobos.find(b => b.event.id === visitModalBoboId) ?? null
@@ -914,8 +946,89 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
             </>
           )}
 
-          {/* ── Placeholder Ostéopathe / Dentiste ── */}
-          {metier && metier !== 'veterinaire' && metier !== 'marechal' && (
+          {/* ── Ostéopathe ── */}
+          {metier === 'osteopathe' && (
+            <>
+              <section>
+                <button
+                  type="button"
+                  onClick={() => setOsteopathePickerOpen(true)}
+                  className="w-full flex items-center justify-center gap-2 font-bold text-sm py-3 rounded-xl border-2 cursor-pointer transition-all"
+                  style={
+                    osteopatheName
+                      ? { borderColor: '#bfe0c9', backgroundColor: '#f0fbf4', color: '#2f6b3f' }
+                      : { borderColor: '#e5e7eb', backgroundColor: 'white', color: '#4b5563' }
+                  }
+                >
+                  <Hand className="w-4 h-4" />
+                  {osteopatheName ?? 'Ostéopathe présent'}
+                </button>
+              </section>
+
+              {/* ── Soin ostéopathe (séance complète / palpation simple en cascade) ── */}
+              {!soinOsteopatheOpen ? (
+                <button
+                  type="button"
+                  onClick={() => setSoinOsteopatheOpen(true)}
+                  className="w-full flex items-center justify-center gap-2 font-bold text-sm py-3 rounded-xl border-2 border-gray-200 bg-white text-gray-600 cursor-pointer hover:border-primary/40 transition-all"
+                >
+                  Soin ostéopathe
+                </button>
+              ) : (
+                <section className="space-y-3">
+                  <SoinStepCard
+                    title="Séance complète"
+                    horses={sortedHorses}
+                    selected={seanceCompleteSelected}
+                    validated={seanceCompleteValidated}
+                    saving={soinSaving}
+                    onToggle={id => toggleInSet(setSeanceCompleteSelected, id)}
+                    onValidate={() =>
+                      validateSoinStep('Séance complète', Array.from(seanceCompleteSelected), () => setSeanceCompleteValidated(true))
+                    }
+                  />
+
+                  {seanceCompleteValidated && (
+                    <SoinStepCard
+                      title="Palpation simple"
+                      horses={remainingApresSeanceComplete}
+                      selected={palpationSelected}
+                      validated={palpationValidated}
+                      saving={soinSaving}
+                      onToggle={id => toggleInSet(setPalpationSelected, id)}
+                      onValidate={() =>
+                        validateSoinStep('Palpation simple', Array.from(palpationSelected), () => setPalpationValidated(true))
+                      }
+                    />
+                  )}
+
+                  {soinError && (
+                    <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{soinError}</p>
+                  )}
+
+                  {seanceCompleteValidated && palpationValidated && (
+                    <div className="flex items-center justify-center gap-1.5 text-sm font-bold" style={{ color: '#2f6b3f' }}>
+                      <Check className="w-4 h-4" />
+                      Soin ostéopathe réparti sur les 7 chevaux
+                    </div>
+                  )}
+                </section>
+              )}
+
+              <section className="text-center">
+                <button
+                  type="button"
+                  onClick={() => setMetier(null)}
+                  className="text-xs text-gray-400 underline underline-offset-2 cursor-pointer"
+                >
+                  ← Changer d'intervenant
+                </button>
+              </section>
+            </>
+          )}
+
+          {/* ── Placeholder Dentiste ── */}
+          {metier === 'dentiste' && (
             <section className="bg-white rounded-xl p-5 text-center shadow-xs">
               <p className="text-sm font-semibold text-gray-700">Bientôt disponible</p>
               <p className="text-xs text-gray-400 mt-1">
@@ -971,6 +1084,14 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
         <MarechalPicker
           onSelect={nom => { setMarechalName(nom); setMarechalPickerOpen(false) }}
           onClose={() => setMarechalPickerOpen(false)}
+        />
+      )}
+
+      {/* ── OsteopathePicker ── */}
+      {osteopathePickerOpen && (
+        <OsteopathePicker
+          onSelect={nom => { setOsteopatheName(nom); setOsteopathePickerOpen(false) }}
+          onClose={() => setOsteopathePickerOpen(false)}
         />
       )}
 

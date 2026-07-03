@@ -133,6 +133,14 @@ export interface Marechal {
   created_at: string
 }
 
+export interface Osteopathe {
+  id: string
+  rang: number
+  nom: string
+  photo_url: string | null
+  created_at: string
+}
+
 // Schema créé en amont (Sprint 5), pas encore de code applicatif dessus.
 // Colonnes confirmées via PostgREST ; nullabilité et valeurs d'enum réelles
 // (status, ocr_status, intervenant_type) non vérifiées — à confirmer avant usage.
