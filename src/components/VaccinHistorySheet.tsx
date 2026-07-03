@@ -95,10 +95,10 @@ export default function VaccinHistorySheet({ horseId, horseName, onClose }: Vacc
               return (
                 <div key={v.id} className="bg-white rounded-xl shadow-xs px-4 py-3">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-bold text-gray-800">
+                    <p className={filter === 'tous' ? 'text-sm font-bold text-gray-800' : 'text-sm text-gray-600'}>
                       {filter === 'tous' ? (def?.label ?? v.vaccine_type) : (drLieu || '—')}
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className={filter === 'tous' ? 'text-xs text-gray-500' : 'text-sm font-bold text-gray-800'}>
                       {new Date(v.injection_date + 'T00:00:00').toLocaleDateString('fr-FR')}
                     </p>
                   </div>
