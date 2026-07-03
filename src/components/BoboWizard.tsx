@@ -148,13 +148,9 @@ const REGIONS_MEMBRE = [
   'Épaule / Hanche',
 ]
 
-const REGIONS_TETE: { label: string; lat: string | null }[] = [
-  { label: 'Œil droit',        lat: 'D' },
-  { label: 'Œil gauche',       lat: 'G' },
-  { label: 'Naseaux',          lat: null },
-  { label: 'Oreilles',         lat: null },
-  { label: 'Bouche / dents',   lat: null },
-  { label: 'Chanfrein / joues',lat: null },
+const COTES = [
+  { label: 'Gauche', code: 'G' },
+  { label: 'Droit',  code: 'D' },
 ]
 
 const FACES_MEMBRE = [
@@ -249,21 +245,19 @@ export default function BoboWizard({ horses, onCreated, onClose }: BoboWizardPro
   function buildLocation(): string {
     const parts: string[] = []
     if (zone) parts.push(zone)
-    if (zone === 'Tête' && region) parts.push(region)
     if (zone === 'Membre' && region) parts.push(region)
     if (zone === 'Membre' && face) parts.push(face)
     return parts.join(' – ')
   }
 
   // Validation de l'étape courante pour débloquer "Suivant"
+  // Seule la zone est obligatoire à l'étape Localisation — tout le reste
+  // (latéralité/côté, région, face) est facultatif.
   function canGoNext(): boolean {
     switch (step) {
       case 1: return !!horseId
       case 2: return !!selectedPathology || isAutre
-      case 3: {
-        if (!selectedPathology?.has_laterality) return true
-        return !!lateraliteCode
-      }
+      case 3: return !!zone
       case 4: return true
       case 5: return true
       default: return false
@@ -469,19 +463,16 @@ export default function BoboWizard({ horses, onCreated, onClose }: BoboWizardPro
 
       // ── 3 — Localisation ──────────────────────────────────────────────
       case 3: {
-        const hasLat = selectedPathology?.has_laterality ?? false
         const locStr = buildLocation()
 
         return (
           <div>
             <h2 className="text-base font-black text-gray-900 mb-1">Localisation</h2>
             <p className="text-xs text-gray-400 mb-4">
-              {hasLat
-                ? 'La latéralité est obligatoire pour cette pathologie.'
-                : 'Optionnel — utilise "Passer" si non applicable.'}
+              Seule la zone est obligatoire — le reste est facultatif.
             </p>
 
-            {/* Niveau 1 — Zone */}
+            {/* Niveau 1 — Zone (obligatoire) */}
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
               Zone
             </p>
@@ -491,11 +482,12 @@ export default function BoboWizard({ horses, onCreated, onClose }: BoboWizardPro
               ))}
             </div>
 
-            {/* Niveau 2a — Latéralité Membre */}
+            {/* Zone = Membre : membre concerné > région > face, tous optionnels */}
             {zone === 'Membre' && (
               <>
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
-                  Membre concerné
+                  Membre concerné{' '}
+                  <span className="normal-case font-normal text-gray-300">(optionnel)</span>
                 </p>
                 <div className="flex flex-wrap gap-1.5 mb-4">
                   {LATERALITES_MEMBRE.map(l => (
@@ -503,22 +495,14 @@ export default function BoboWizard({ horses, onCreated, onClose }: BoboWizardPro
                       key={l.code}
                       label={l.label}
                       selected={lateraliteCode === l.code}
-                      onClick={() => {
-                        setLateraliteCode(l.code)
-                        setRegion('')
-                        setFace('')
-                      }}
+                      onClick={() => setLateraliteCode(lateraliteCode === l.code ? null : l.code)}
                     />
                   ))}
                 </div>
-              </>
-            )}
 
-            {/* Niveau 2b — Région Membre (après latéralité) */}
-            {zone === 'Membre' && lateraliteCode && (
-              <>
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
-                  Région
+                  Région{' '}
+                  <span className="normal-case font-normal text-gray-300">(optionnel)</span>
                 </p>
                 <div className="flex flex-wrap gap-1.5 mb-4">
                   {REGIONS_MEMBRE.map(r => (
@@ -526,38 +510,11 @@ export default function BoboWizard({ horses, onCreated, onClose }: BoboWizardPro
                       key={r}
                       label={r}
                       selected={region === r}
-                      onClick={() => { setRegion(r); setFace('') }}
+                      onClick={() => setRegion(region === r ? '' : r)}
                     />
                   ))}
                 </div>
-              </>
-            )}
 
-            {/* Niveau 2 — Région Tête (avec latéralité pour les yeux) */}
-            {zone === 'Tête' && (
-              <>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
-                  Région
-                </p>
-                <div className="flex flex-wrap gap-1.5 mb-4">
-                  {REGIONS_TETE.map(r => (
-                    <Chip
-                      key={r.label}
-                      label={r.label}
-                      selected={region === r.label}
-                      onClick={() => {
-                        setRegion(r.label)
-                        setLateraliteCode(r.lat)
-                      }}
-                    />
-                  ))}
-                </div>
-              </>
-            )}
-
-            {/* Niveau 3 — Face Membre (optionnel, toggle) */}
-            {zone === 'Membre' && region && (
-              <>
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
                   Face{' '}
                   <span className="normal-case font-normal text-gray-300">(optionnel)</span>
@@ -569,6 +526,26 @@ export default function BoboWizard({ horses, onCreated, onClose }: BoboWizardPro
                       label={f}
                       selected={face === f}
                       onClick={() => setFace(face === f ? '' : f)}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Zone ≠ Membre : simple côté gauche/droit, optionnel */}
+            {zone && zone !== 'Membre' && (
+              <>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
+                  Côté{' '}
+                  <span className="normal-case font-normal text-gray-300">(optionnel)</span>
+                </p>
+                <div className="flex flex-wrap gap-1.5 mb-4">
+                  {COTES.map(c => (
+                    <Chip
+                      key={c.code}
+                      label={c.label}
+                      selected={lateraliteCode === c.code}
+                      onClick={() => setLateraliteCode(lateraliteCode === c.code ? null : c.code)}
                     />
                   ))}
                 </div>
@@ -693,8 +670,6 @@ export default function BoboWizard({ horses, onCreated, onClose }: BoboWizardPro
 
   const nextDisabled = !canGoNext() || saving
   const isLastStep = step === TOTAL_STEPS
-  // Bouton "Passer" visible à l'étape 3 uniquement si latéralité non obligatoire
-  const showSkipLoc = step === 3 && !(selectedPathology?.has_laterality)
 
   return (
     <>
@@ -744,24 +719,7 @@ export default function BoboWizard({ horses, onCreated, onClose }: BoboWizardPro
             <div className="w-16" />
           )}
 
-          {/* Bouton "Passer" pour étape 3 sans latéralité obligatoire */}
-          {showSkipLoc && (
-            <button
-              type="button"
-              onClick={() => {
-                setZone('')
-                setLateraliteCode(null)
-                setRegion('')
-                setFace('')
-                setStep(s => s + 1)
-              }}
-              className="flex-1 text-sm font-bold text-gray-400 py-2.5 rounded-xl border border-gray-200 bg-white cursor-pointer hover:bg-gray-50 transition-colors"
-              >
-                Passer
-              </button>
-            )}
-
-            <button
+          <button
               type="button"
               onClick={isLastStep ? handleSubmit : handleNext}
               disabled={nextDisabled}
