@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { AmbiancePhoto, Horse, PhotoTag } from '../lib/types'
 import { CANONICAL_ORDER, HORSE_COLORS, formatDateTime } from '../lib/types'
-import { Image as ImageIcon, X, Share2, Download, Plus, Tag, Filter, ChevronLeft } from 'lucide-react'
+import { resizeImageToBlob, THUMBNAIL_MAX_DIM, THUMBNAIL_QUALITY } from '../lib/imageResize'
+import { Image as ImageIcon, X, Share2, Download, Plus, Tag, Filter, ChevronLeft, Trash2, RefreshCw } from 'lucide-react'
 // @ts-ignore — piexifjs n'a pas de types officiels à jour pour cette API, @types/piexifjs couvre l'essentiel
 import piexif from 'piexifjs'
 
@@ -322,11 +323,13 @@ function PhotoViewer({
   horses,
   users,
   onClose,
+  onDeleted,
 }: {
   photo: AmbiancePhoto
   horses: Horse[]
   users: SimpleUser[]
   onClose: () => void
+  onDeleted: (photoId: string) => void
 }) {
   const [sharing, setSharing] = useState(false)
   const [shareError, setShareError] = useState<string | null>(null)
@@ -337,6 +340,34 @@ function PhotoViewer({
   const [humanSuggestions, setHumanSuggestions] = useState<string[]>([])
   const [showHorsePicker, setShowHorsePicker] = useState(false)
   const [showHumanPicker, setShowHumanPicker] = useState(false)
+
+  // ── Suppression (Famille) ──────────────────────────────────────────────
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  async function handleDelete() {
+    setDeleting(true)
+    setDeleteError(null)
+    try {
+      const { error: tagsErr } = await supabase.from('photo_tags').delete().eq('photo_id', photo.id)
+      if (tagsErr) throw tagsErr
+      const { error: photoErr } = await supabase.from('ambiance_photos').delete().eq('id', photo.id)
+      if (photoErr) throw photoErr
+
+      // Nettoyage du stockage — best-effort, une facture/photo déjà retirée de
+      // la base ne doit pas rester bloquée par un échec de suppression fichier.
+      if (photo.storage_path) {
+        await supabase.storage.from('ambiance-photos').remove([photo.storage_path])
+        await supabase.storage.from('ambiance-photos').remove([`thumb/${photo.storage_path}`])
+      }
+
+      onDeleted(photo.id)
+    } catch (err: unknown) {
+      setDeleteError(err instanceof Error ? err.message : 'Erreur lors de la suppression.')
+      setDeleting(false)
+    }
+  }
 
   async function fetchTags() {
     setTagsLoading(true)
@@ -406,22 +437,35 @@ function PhotoViewer({
   const horseTags = tags.filter(t => t.tag_type === 'horse')
   const humanTags = tags.filter(t => t.tag_type === 'human')
 
+  // Extension cohérente avec le vrai type MIME reçu (les photos ne sont pas
+  // toutes des JPEG malgré le suffixe .jpg par défaut du nom de fichier).
+  function extensionForMime(mime: string): string {
+    if (mime.includes('png')) return 'png'
+    if (mime.includes('heic')) return 'heic'
+    if (mime.includes('webp')) return 'webp'
+    return 'jpg'
+  }
+
   async function handleShare() {
     setSharing(true)
     setShareError(null)
     try {
       const response = await fetch(photo.photo_url)
       const blob = await response.blob()
-      const file = new File([blob], `pegasus-ambiance-${photo.id}.jpg`, { type: blob.type || 'image/jpeg' })
+      const mime = blob.type || 'image/jpeg'
+      const file = new File([blob], `pegasus-ambiance-${photo.id}.${extensionForMime(mime)}`, { type: mime })
 
+      // navigator.share avec "files" est ce qui fait apparaître "Enregistrer
+      // dans Google Photos" dans la feuille de partage Android — priorité 1.
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: 'Photo Pegasus' })
+        await navigator.share({ files: [file], title: 'Photo Pegasus — Élevage Scalbert' })
       } else {
+        const objectUrl = URL.createObjectURL(blob)
         const link = document.createElement('a')
-        link.href = URL.createObjectURL(blob)
-        link.download = `pegasus-ambiance-${photo.id}.jpg`
+        link.href = objectUrl
+        link.download = file.name
         link.click()
-        URL.revokeObjectURL(link.href)
+        URL.revokeObjectURL(objectUrl)
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : ''
@@ -433,12 +477,23 @@ function PhotoViewer({
     }
   }
 
-  function handleDownload() {
-    const link = document.createElement('a')
-    link.href = photo.photo_url
-    link.download = `pegasus-ambiance-${photo.id}.jpg`
-    link.target = '_blank'
-    link.click()
+  async function handleDownload() {
+    // Le fichier étant cross-origin (Supabase Storage), l'attribut "download"
+    // est ignoré par la plupart des navigateurs sur une URL directe — on
+    // passe donc par un blob local (même origine) pour forcer le téléchargement.
+    try {
+      const response = await fetch(photo.photo_url)
+      const blob = await response.blob()
+      const mime = blob.type || 'image/jpeg'
+      const objectUrl = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = objectUrl
+      link.download = `pegasus-ambiance-${photo.id}.${extensionForMime(mime)}`
+      link.click()
+      URL.revokeObjectURL(objectUrl)
+    } catch {
+      setShareError('Téléchargement impossible.')
+    }
   }
 
   return (
@@ -448,13 +503,22 @@ function PhotoViewer({
           <span className="text-xs font-bold text-white/80">
             {formatDateTime(photo.visited_at)}
           </span>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 cursor-pointer hover:bg-white/20"
-          >
-            <X className="w-4 h-4 text-white" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(true)}
+              className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 cursor-pointer hover:bg-red-500/30"
+            >
+              <Trash2 className="w-4 h-4 text-white" />
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 cursor-pointer hover:bg-white/20"
+            >
+              <X className="w-4 h-4 text-white" />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto no-scrollbar px-3">
@@ -572,6 +636,44 @@ function PhotoViewer({
           </p>
         </div>
       </div>
+
+      {/* ── Popup confirmation suppression ── */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 px-6">
+          <div className="bg-white rounded-xl p-5 w-full max-w-xs">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-bold text-gray-900">Supprimer cette photo ?</p>
+              <button onClick={() => setConfirmDelete(false)} className="cursor-pointer">
+                <X className="w-4 h-4 text-gray-400" />
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mb-4">
+              Action définitive — la photo et ses tags seront supprimés.
+            </p>
+            {deleteError && (
+              <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">
+                {deleteError}
+              </p>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirmDelete(false)}
+                disabled={deleting}
+                className="flex-1 py-2 rounded-lg text-xs font-bold text-gray-500 bg-gray-50 cursor-pointer disabled:opacity-50"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="flex-1 py-2 rounded-lg text-xs font-bold text-white bg-red-600 cursor-pointer disabled:opacity-50"
+              >
+                {deleting ? 'Suppression…' : 'Supprimer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -584,6 +686,10 @@ export default function GaleriePhotos() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedPhoto, setSelectedPhoto] = useState<AmbiancePhoto | null>(null)
+
+  // ── Génération rétroactive des miniatures manquantes ──────────────────────
+  const [generatingThumbs, setGeneratingThumbs] = useState(false)
+  const [thumbProgress, setThumbProgress] = useState<{ done: number; total: number } | null>(null)
 
   // ── Filtre par tags ───────────────────────────────────────────────────────
   const [showFilter, setShowFilter] = useState(false)
@@ -623,38 +729,79 @@ export default function GaleriePhotos() {
     })
   }
 
-  useEffect(() => {
-    async function fetchAll() {
-      setLoading(true)
-      setError(null)
+  async function fetchAll() {
+    setLoading(true)
+    setError(null)
+    try {
+      const { data: photosData, error: photosErr } = await supabase
+        .from('ambiance_photos')
+        .select('*')
+        .order('visited_at', { ascending: false })
+      if (photosErr) throw photosErr
+      setPhotos(photosData ?? [])
+
+      const { data: horsesData } = await supabase.from('horses').select('*')
+      setHorses(horsesData ?? [])
+
+      // La lecture de public.users peut être restreinte selon les policies —
+      // en cas d'échec on continue simplement sans suggestions "humain" prédéfinies.
       try {
-        const { data: photosData, error: photosErr } = await supabase
-          .from('ambiance_photos')
-          .select('*')
-          .order('visited_at', { ascending: false })
-        if (photosErr) throw photosErr
-        setPhotos(photosData ?? [])
-
-        const { data: horsesData } = await supabase.from('horses').select('*')
-        setHorses(horsesData ?? [])
-
-        // La lecture de public.users peut être restreinte selon les policies —
-        // en cas d'échec on continue simplement sans suggestions "humain" prédéfinies.
-        try {
-          const { data: usersData } = await supabase.from('users').select('id, name')
-          setUsers(usersData ?? [])
-        } catch {
-          setUsers([])
-        }
-      } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : 'Erreur inconnue')
-      } finally {
-        setLoading(false)
+        const { data: usersData } = await supabase.from('users').select('id, name')
+        setUsers(usersData ?? [])
+      } catch {
+        setUsers([])
       }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erreur inconnue')
+    } finally {
+      setLoading(false)
     }
+  }
+
+  useEffect(() => {
     fetchAll()
     fetchAllTags()
   }, [])
+
+  function handlePhotoDeleted(photoId: string) {
+    setPhotos(prev => prev.filter(p => p.id !== photoId))
+    setSelectedPhoto(null)
+  }
+
+  // Régénère les miniatures des photos déjà en ligne avant l'ajout de
+  // thumbnail_url — best-effort, une photo par photo pour ne pas saturer.
+  async function handleGenerateMissingThumbnails() {
+    const targets = photos.filter(p => !p.thumbnail_url && p.storage_path)
+    if (targets.length === 0) return
+    setGeneratingThumbs(true)
+    setThumbProgress({ done: 0, total: targets.length })
+    for (let i = 0; i < targets.length; i++) {
+      const photo = targets[i]
+      try {
+        const response = await fetch(photo.photo_url)
+        const blob = await response.blob()
+        const thumbBlob = await resizeImageToBlob(blob, THUMBNAIL_MAX_DIM, THUMBNAIL_QUALITY)
+        const thumbPath = `thumb/${photo.storage_path}`
+        const { error: uploadErr } = await supabase.storage
+          .from('ambiance-photos')
+          .upload(thumbPath, thumbBlob, { upsert: true })
+        if (!uploadErr) {
+          const { data: signedData } = await supabase.storage
+            .from('ambiance-photos')
+            .createSignedUrl(thumbPath, 60 * 60 * 24 * 365)
+          if (signedData?.signedUrl) {
+            await supabase.from('ambiance_photos').update({ thumbnail_url: signedData.signedUrl }).eq('id', photo.id)
+          }
+        }
+      } catch (err) {
+        console.error('Génération miniature impossible pour', photo.id, err)
+      }
+      setThumbProgress({ done: i + 1, total: targets.length })
+    }
+    await fetchAll()
+    setGeneratingThumbs(false)
+    setThumbProgress(null)
+  }
 
   const filteredPhotos = selectedFilterKeys.size === 0
     ? photos
@@ -666,6 +813,8 @@ export default function GaleriePhotos() {
         }
         return true
       })
+
+  const missingThumbCount = photos.filter(p => !p.thumbnail_url && p.storage_path).length
 
   const grouped: { dateLabel: string; items: AmbiancePhoto[] }[] = []
   for (const photo of filteredPhotos) {
@@ -716,6 +865,19 @@ export default function GaleriePhotos() {
         </div>
 
         <div className="flex-1 overflow-y-auto no-scrollbar px-4 pb-6">
+          {!loading && missingThumbCount > 0 && (
+            <button
+              type="button"
+              onClick={handleGenerateMissingThumbnails}
+              disabled={generatingThumbs}
+              className="w-full flex items-center justify-center gap-2 text-xs font-bold text-gray-500 bg-white border border-gray-200 rounded-xl py-2.5 mb-4 cursor-pointer hover:border-primary/40 disabled:opacity-60"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${generatingThumbs ? 'animate-spin' : ''}`} />
+              {generatingThumbs && thumbProgress
+                ? `Génération des miniatures… ${thumbProgress.done}/${thumbProgress.total}`
+                : `Générer les miniatures manquantes (${missingThumbCount})`}
+            </button>
+          )}
           {loading ? (
             <Spinner />
           ) : error ? (
@@ -751,8 +913,10 @@ export default function GaleriePhotos() {
                         className="aspect-square rounded-lg overflow-hidden bg-gray-100 cursor-pointer"
                       >
                         <img
-                          src={photo.photo_url}
+                          src={photo.thumbnail_url ?? photo.photo_url}
                           alt="Photo d'ambiance"
+                          loading="lazy"
+                          decoding="async"
                           className="w-full h-full object-cover"
                         />
                       </button>
@@ -771,6 +935,7 @@ export default function GaleriePhotos() {
           horses={horses}
           users={users}
           onClose={() => setSelectedPhoto(null)}
+          onDeleted={handlePhotoDeleted}
         />
       )}
 

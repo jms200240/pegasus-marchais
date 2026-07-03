@@ -74,6 +74,7 @@ export interface AmbiancePhoto {
   visited_at: string
   photo_url: string
   storage_path: string | null
+  thumbnail_url: string | null   // miniature compressée (grille galerie) ; null = pas encore générée
   created_at: string
 }
 
