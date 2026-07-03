@@ -44,13 +44,14 @@ Opérationnel en production (`pegasus-marchais.vercel.app`) :
 - 121 lignes d'historique de vaccination importées en Supabase
 - Finances : Saisie de facture (multi-chevaux ou 1 seul cheval, bucket "Autre" hors suivi) + Suivi des coûts (total annuel, ventilation cheval/prestataire en bar charts avec drill-down, factures via InvoiceDetailSheet — ouverture en lecture seule, bouton "Modifier" pour éditer)
 - VisiteProSheet — Maréchal-ferrant : MarechalPicker (2 maréchaux, photos bundlées), bobos actifs filtrés sur pathologies pied/fourbure (Seime, Abcès du pied, Fourbure, Pourriture de fourchette, Fourmilière), flux "Soin maréchal" en cascade (Parage 4 pieds → Ferrure antérieurs → Ferrure 4 pieds) écrivant dans `health_events`
+- VisiteProSheet — Ostéopathe : OsteopathePicker (1 ostéopathe, Maëlys Bizet, photo bundlée), pas de section bobos, flux "Soin ostéopathe" en cascade (Séance complète → Palpation simple). `validateSoinStep`/le suffixe de note sont désormais génériques par métier (marechal/osteo/veterinaire), plus câblés en dur sur le maréchal
 - Fiches Vaccins (contenu IFCE, 4 vaccins en accordéon) accessible depuis Rappels vaccins
 - Échelle de gravité en dégradé couleur (vert→rouge, remplace les étoiles), lecture seule et sélection interactive
 - BoboWizard — Localisation : seule "Zone" est obligatoire ; Membre concerné/Région/Face (zone Membre) ou Côté (autres zones) sont des sélections indépendantes et facultatives (`pathology.has_laterality` n'est plus utilisé pour bloquer la progression)
 
-Tables Supabase existantes : `health_events`, `health_event_visits`, `farm_alerts`, `ambiance_photos`, `photo_tags`, `vaccinations`, `vaccine_exclusions`, `veterinaires`, `marechaux`, `invoices`, `invoices_staging`, `expenses` (RLS confirmé : Famille = ALL, Groom = aucun accès). `invoices`/`expenses` utilisées par l'écran Finances ; `invoices_staging` toujours sans code applicatif (réservée au pipeline OCR).
+Tables Supabase existantes : `health_events`, `health_event_visits`, `farm_alerts`, `ambiance_photos`, `photo_tags`, `vaccinations`, `vaccine_exclusions`, `veterinaires`, `marechaux`, `osteopathes`, `invoices`, `invoices_staging`, `expenses` (RLS confirmé : Famille = ALL, Groom = aucun accès). `invoices`/`expenses` utilisées par l'écran Finances ; `invoices_staging` toujours sans code applicatif (réservée au pipeline OCR).
 
-Restant à faire sur les workflows Visite pro : Soin véto, placeholders Ostéopathe/Dentiste (pathologies dentiste déjà identifiées : Troubles dentaires/surdents, à câbler quand ce workflow sera construit).
+Restant à faire sur les workflows Visite pro : Soin véto, placeholder Dentiste (pathologies déjà identifiées : Troubles dentaires/surdents, à câbler quand ce workflow sera construit).
 
 ## Roadmap
 
