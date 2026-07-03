@@ -56,19 +56,16 @@ Opérationnel en production (`pegasus-marchais.vercel.app`) :
 - Soins → Rappels vaccins : liste détaillée triée par échéance croissante ("Vaccin(s) — chevaux concernés — avant le [date]", regroupe toutes les échéances connues même hors fenêtre d'alerte), date modifiable inline via `<input type="date">` gaté par une popup "Date validée avec le vétérinaire ?" avant écriture de `next_reminder_override`
 - Accueil : photo d'ambiance tirée au hasard à chaque ouverture (plus la dernière uploadée), bouton "Démarrer une visite pro" repositionné sous la photo
 - VisiteProSheet — Dentiste : DentistePicker (Loïc Hensmans, photo bundlée `src/assets/dentistes/`), flux "Soin dentiste" en cascade (Nivellement → Extraction), remplace le placeholder — table `dentistes` créée et confirmée
-- VisiteProSheet — Vétérinaire : bouton "Soin véto" ouvre `SoinVetoSheet` (horodatage, soin en texte libre, chevaux concernés en tags colorés, commentaire, case "Rappel" optionnelle → date + texte, écrit dans `health_events` + `soin_reminders` si rappel coché) — table `soin_reminders` en attente de création (cf ci-dessous)
+- VisiteProSheet — Vétérinaire : bouton "Soin véto" ouvre `SoinVetoSheet` (horodatage, soin en texte libre, chevaux concernés en tags colorés, commentaire, case "Rappel" optionnelle → date + texte, écrit dans `health_events` + `soin_reminders` si rappel coché) — table `soin_reminders` créée et confirmée
 - Soins.tsx : nouvelle section "Rappels soins" (`SoinReminders`), affiche les rappels dont l'échéance est à ≤ 7 jours (ou dépassée), triés par date
 - FicheCheval : "Historique médical" éclaté en 3 sections pliables avec compteur à droite du titre (Vaccins / Soins / Bobos, repliées par défaut) :
   - **Vaccins** : prochains rappels connus pour ce cheval + lien "Historique complet" ouvrant `VaccinHistorySheet` (ordre antéchronologique, filtres Tous/Grippe/Tétanos/Rhinopneumonie/Rage)
   - **Soins** (Véto/Maréchal/Ostéo/Dentiste) : `health_events` avec `pathology_id` null ET `type` dans l'énumération métier — exclut les bobos "Autre" à note libre (BoboWizard) qui n'ont pas de `type` métier
   - **Bobos** : le reste (liés à une pathologie, ou notes libres "Autre" sans type métier)
 - FicheCheval : en-tête photo/nom en layout côte-à-côte (photo agrandie à gauche, nom/race/badge à droite) au lieu d'empilé centré — cadre coloré d'en-tête conservé à taille quasi identique (~1/3 écran) ; nom en police réduite au-delà de 10 caractères pour éviter la troncature
-- VaccinHistorySheet : quand un vaccin précis est filtré (pas "Tous"), le nom du vaccin n'est plus répété sur chaque ligne (déjà induit par le filtre) — seulement Dr / lieu / date
+- VaccinHistorySheet : quand un vaccin précis est filtré (pas "Tous"), le nom du vaccin n'est plus répété sur chaque ligne (déjà induit par le filtre) — seulement Dr / lieu (normal) / date (gras)
 
-Tables Supabase existantes : `health_events`, `health_event_visits`, `farm_alerts`, `ambiance_photos`, `photo_tags`, `vaccinations`, `vaccine_exclusions`, `veterinaires`, `marechaux`, `osteopathes`, `dentistes`, `invoices`, `invoices_staging`, `expenses` (RLS confirmé : Famille = ALL, Groom = aucun accès). `invoices`/`expenses` utilisées par l'écran Finances ; `invoices_staging` toujours sans code applicatif (réservée au pipeline OCR).
-
-En attente de schéma avant fonctionnement complet (code déjà poussé, dégradation silencieuse tant que non créée — liste vide / pas de crash) :
-- `soin_reminders` (visited_at, soin, horse_ids uuid[], comment, veterinarian, reminder_date, reminder_text) — bloque la case "Rappel" du Soin véto et la section "Rappels soins" de Soins.tsx
+Tables Supabase existantes : `health_events`, `health_event_visits`, `farm_alerts`, `ambiance_photos`, `photo_tags`, `vaccinations`, `vaccine_exclusions`, `veterinaires`, `marechaux`, `osteopathes`, `dentistes`, `soin_reminders`, `invoices`, `invoices_staging`, `expenses` (RLS confirmé : Famille = ALL, Groom = aucun accès). `invoices`/`expenses` utilisées par l'écran Finances ; `invoices_staging` toujours sans code applicatif (réservée au pipeline OCR).
 
 ## Roadmap
 
