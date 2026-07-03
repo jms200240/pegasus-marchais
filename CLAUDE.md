@@ -55,10 +55,19 @@ Opérationnel en production (`pegasus-marchais.vercel.app`) :
 - Fiches Chevaux (liste + fiche détail) : vignette photo réelle (`src/lib/horsePhotos.ts`, assets `src/assets/chevaux/`) à la place de l'initiale, avec repli sur `photo_url` puis initiale si aucune photo bundlée
 - Soins → Rappels vaccins : liste détaillée triée par échéance croissante ("Vaccin(s) — chevaux concernés — avant le [date]", regroupe toutes les échéances connues même hors fenêtre d'alerte), date modifiable inline via `<input type="date">` gaté par une popup "Date validée avec le vétérinaire ?" avant écriture de `next_reminder_override`
 - Accueil : photo d'ambiance tirée au hasard à chaque ouverture (plus la dernière uploadée), bouton "Démarrer une visite pro" repositionné sous la photo
+- VisiteProSheet — Dentiste : DentistePicker (Loïc Hensmans, photo bundlée `src/assets/dentistes/`), flux "Soin dentiste" en cascade (Nivellement → Extraction), remplace le placeholder — table `dentistes` en attente de création (cf ci-dessous)
+- VisiteProSheet — Vétérinaire : bouton "Soin véto" ouvre `SoinVetoSheet` (horodatage, soin en texte libre, chevaux concernés en tags colorés, commentaire, case "Rappel" optionnelle → date + texte, écrit dans `health_events` + `soin_reminders` si rappel coché) — table `soin_reminders` en attente de création (cf ci-dessous)
+- Soins.tsx : nouvelle section "Rappels soins" (`SoinReminders`), affiche les rappels dont l'échéance est à ≤ 7 jours (ou dépassée), triés par date
+- FicheCheval : "Historique médical" éclaté en 3 sections pliables avec compteur à droite du titre (Vaccins / Soins / Bobos, repliées par défaut) :
+  - **Vaccins** : prochains rappels connus pour ce cheval + lien "Historique complet" ouvrant `VaccinHistorySheet` (ordre antéchronologique, filtres Tous/Grippe/Tétanos/Rhinopneumonie/Rage)
+  - **Soins** (Véto/Maréchal/Ostéo/Dentiste) : `health_events` avec `pathology_id` null ET `type` dans l'énumération métier — exclut les bobos "Autre" à note libre (BoboWizard) qui n'ont pas de `type` métier
+  - **Bobos** : le reste (liés à une pathologie, ou notes libres "Autre" sans type métier)
 
 Tables Supabase existantes : `health_events`, `health_event_visits`, `farm_alerts`, `ambiance_photos`, `photo_tags`, `vaccinations`, `vaccine_exclusions`, `veterinaires`, `marechaux`, `osteopathes`, `invoices`, `invoices_staging`, `expenses` (RLS confirmé : Famille = ALL, Groom = aucun accès). `invoices`/`expenses` utilisées par l'écran Finances ; `invoices_staging` toujours sans code applicatif (réservée au pipeline OCR).
 
-Restant à faire sur les workflows Visite pro : Soin véto, placeholder Dentiste (pathologies déjà identifiées : Troubles dentaires/surdents, à câbler quand ce workflow sera construit).
+En attente de schéma avant fonctionnement complet (code déjà poussé, dégradation silencieuse tant que non créées — listes vides / pas de crash) :
+- `dentistes` (rang, nom, photo_url, created_at) — bloque le picker Dentiste (affiche seulement "Ajouter" tant que vide)
+- `soin_reminders` (visited_at, soin, horse_ids uuid[], comment, veterinarian, reminder_date, reminder_text) — bloque la case "Rappel" du Soin véto et la section "Rappels soins" de Soins.tsx
 
 ## Roadmap
 
