@@ -12,22 +12,33 @@ export interface Horse {
   sire_name: string | null       // Nom du père SIRE (texte)
   sire_number: string | null     // Numéro SIRE officiel
   ueln: string | null            // Universal Equine Life Number
+  sex: 'F' | 'M' | null
   race: string | null            // Race / breed
   robe: string | null            // Couleur de robe
   born_at: string | null         // ISO date string
+  died_at: string | null
+  naisseur: string | null
+  adresse_elevage: string | null
   photo_url: string | null       // URL Supabase Storage
   ifce_url: string | null        // Lien vers la fiche IFCE
   created_at: string
+  updated_at: string
 }
 
 export interface Genealogy {
   id: string
   horse_id: string
+  generation: number | null
   pere_name: string | null       // Nom du père (texte libre)
   mere_name: string | null       // Nom de la mère (texte libre)
-  pere_id: string | null         // FK vers horses (optionnel)
+  pdm_name: string | null        // Nom du père de mère (texte libre)
+  pere_id: string | null         // FK vers horses (optionnel — si l'ancêtre est aussi dans notre cavalerie)
   mere_id: string | null         // FK vers horses (optionnel)
-  pdm_name: string | null
+  pdm_id: string | null          // FK vers horses (optionnel)
+  pere_url: string | null        // Lien IFCE du père, si pere_id résolu
+  mere_url: string | null        // Lien IFCE de la mère, si mere_id résolu
+  pdm_url: string | null         // Lien IFCE du père de mère, si pdm_id résolu
+  created_at: string
 }
 
 export interface HealthEvent {

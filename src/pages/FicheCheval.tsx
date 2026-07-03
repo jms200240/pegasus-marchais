@@ -211,6 +211,7 @@ export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChe
 
   const fatherHorse = findHorseById(genealogy?.pere_id ?? null)
   const motherHorse = findHorseById(genealogy?.mere_id ?? null)
+  const pdmHorse = findHorseById(genealogy?.pdm_id ?? null)
 
   return (
     <div className="flex-1 flex flex-col overflow-y-auto no-scrollbar">
@@ -279,7 +280,7 @@ export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChe
         )}
 
         {/* Généalogie */}
-        {genealogy && (genealogy.pere_name || genealogy.mere_name) && (
+        {genealogy && (genealogy.pere_name || genealogy.mere_name || genealogy.pdm_name) && (
           <>
             <SectionTitle icon={Award} title="Généalogie" />
             <div className="bg-white rounded-xl px-4 py-1 shadow-xs">
@@ -321,7 +322,17 @@ export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChe
               {genealogy.pdm_name && (
                 <div className="flex justify-between items-center py-2.5">
                   <span className="text-xs text-gray-500 font-medium">Père de mère</span>
-                  <span className="text-xs font-semibold text-gray-800">{genealogy.pdm_name}</span>
+                  {pdmHorse ? (
+                    <button
+                      onClick={() => onSelectHorse(pdmHorse.id)}
+                      className="text-xs font-bold text-primary flex items-center gap-1 cursor-pointer"
+                    >
+                      {genealogy.pdm_name}
+                      <ChevronRightIcon />
+                    </button>
+                  ) : (
+                    <span className="text-xs font-semibold text-gray-800">{genealogy.pdm_name}</span>
+                  )}
                 </div>
               )}
             </div>

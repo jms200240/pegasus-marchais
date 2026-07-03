@@ -740,7 +740,7 @@ export default function GaleriePhotos() {
       if (photosErr) throw photosErr
       setPhotos(photosData ?? [])
 
-      const { data: horsesData } = await supabase.from('horses').select('*')
+      const { data: horsesData } = await supabase.from('horses').select('*').eq('is_active', true)
       setHorses(horsesData ?? [])
 
       // La lecture de public.users peut être restreinte selon les policies —
