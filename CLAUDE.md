@@ -51,6 +51,7 @@ Opérationnel en production (`pegasus-marchais.vercel.app`) :
 - Finances : menu réordonné (Suivi des coûts en premier), bloc "Total TTC payé" visible directement dans le menu
 - VaccinSheet : aperçu "Prochain rappel" groupé par date de cadence (ex. Grippe+Tétanos+Rage vs Rhino), date modifiable → `next_reminder_override`
 - Galerie : suppression de photo (Famille), partage/téléchargement corrigés (l'ancien téléchargement ignorait l'attribut `download` sur URL cross-origin), grille en miniatures + lazy-loading avec repli sur la photo pleine taille si pas de miniature
+- VisiteSheet/VisiteProSheet : génération de miniature (`thumbnail_url`) à l'upload d'une photo d'ambiance, best-effort (n'empêche jamais l'upload de l'original en cas d'échec) — même pattern que la Galerie
 - Fiches Chevaux (liste + fiche détail) : vignette photo réelle (`src/lib/horsePhotos.ts`, assets `src/assets/chevaux/`) à la place de l'initiale, avec repli sur `photo_url` puis initiale si aucune photo bundlée
 - Soins → Rappels vaccins : liste détaillée triée par échéance croissante ("Vaccin(s) — chevaux concernés — avant le [date]", regroupe toutes les échéances connues même hors fenêtre d'alerte), date modifiable inline via `<input type="date">` gaté par une popup "Date validée avec le vétérinaire ?" avant écriture de `next_reminder_override`
 - Accueil : photo d'ambiance tirée au hasard à chaque ouverture (plus la dernière uploadée), bouton "Démarrer une visite pro" repositionné sous la photo
@@ -58,8 +59,6 @@ Opérationnel en production (`pegasus-marchais.vercel.app`) :
 Tables Supabase existantes : `health_events`, `health_event_visits`, `farm_alerts`, `ambiance_photos`, `photo_tags`, `vaccinations`, `vaccine_exclusions`, `veterinaires`, `marechaux`, `osteopathes`, `invoices`, `invoices_staging`, `expenses` (RLS confirmé : Famille = ALL, Groom = aucun accès). `invoices`/`expenses` utilisées par l'écran Finances ; `invoices_staging` toujours sans code applicatif (réservée au pipeline OCR).
 
 Restant à faire sur les workflows Visite pro : Soin véto, placeholder Dentiste (pathologies déjà identifiées : Troubles dentaires/surdents, à câbler quand ce workflow sera construit).
-
-En attente de schéma avant suite : `ambiance_photos.thumbnail_url` (colonne proposée, pas encore confirmée) — bloque la génération de miniature à l'upload dans VisiteProSheet/VisiteSheet (code prêt mais non committé pour ne pas casser l'upload en prod tant que la colonne n'existe pas).
 
 ## Roadmap
 
