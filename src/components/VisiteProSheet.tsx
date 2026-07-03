@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Horse, HealthEvent, HealthEventVisit, Pathology } from '../lib/types'
 import { CANONICAL_ORDER, HORSE_COLORS } from '../lib/types'
+import { resizeImageToBlob, THUMBNAIL_MAX_DIM, THUMBNAIL_QUALITY } from '../lib/imageResize'
 import { X, ChevronDown, ChevronUp, Plus, Check, CheckCircle, Camera, Stethoscope, Anvil, Hand } from 'lucide-react'
 import { getBoboTitle, VisitModal } from './BoboCard'
 import BoboWizard from './BoboWizard'
@@ -401,7 +402,7 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
     setAmbianceMessage(null)
     try {
       const visitedAtISO = fromDatetimeLocal(visitedAt)
-      const rows: { visited_at: string; photo_url: string; storage_path: string }[] = []
+      const rows: { visited_at: string; photo_url: string; storage_path: string; thumbnail_url: string | null }[] = []
 
       for (const file of files) {
         const path = `${Date.now()}-${file.name}`
@@ -415,8 +416,27 @@ export default function VisiteProSheet({ onClose }: VisiteProSheetProps) {
           .createSignedUrl(path, 60 * 60 * 24 * 365)
         if (signedErr) throw signedErr
 
+        // Miniature compressée pour la grille galerie — best-effort, ne bloque
+        // jamais l'upload de l'original si la génération échoue.
+        let thumbnailUrl: string | null = null
+        try {
+          const thumbBlob = await resizeImageToBlob(file, THUMBNAIL_MAX_DIM, THUMBNAIL_QUALITY)
+          const thumbPath = `thumb/${path}`
+          const { error: thumbUploadErr } = await supabase.storage
+            .from('ambiance-photos')
+            .upload(thumbPath, thumbBlob)
+          if (!thumbUploadErr) {
+            const { data: thumbSigned } = await supabase.storage
+              .from('ambiance-photos')
+              .createSignedUrl(thumbPath, 60 * 60 * 24 * 365)
+            thumbnailUrl = thumbSigned?.signedUrl ?? null
+          }
+        } catch (thumbErr) {
+          console.error('Génération miniature impossible :', thumbErr)
+        }
+
         if (signedData?.signedUrl) {
-          rows.push({ visited_at: visitedAtISO, photo_url: signedData.signedUrl, storage_path: path })
+          rows.push({ visited_at: visitedAtISO, photo_url: signedData.signedUrl, storage_path: path, thumbnail_url: thumbnailUrl })
         }
       }
 
