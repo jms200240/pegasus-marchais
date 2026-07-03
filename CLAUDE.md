@@ -46,6 +46,7 @@ Opérationnel en production (`pegasus-marchais.vercel.app`) :
 - VisiteProSheet — Maréchal-ferrant : MarechalPicker (2 maréchaux, photos bundlées), bobos actifs filtrés sur pathologies pied/fourbure (Seime, Abcès du pied, Fourbure, Pourriture de fourchette, Fourmilière), flux "Soin maréchal" en cascade (Parage 4 pieds → Ferrure antérieurs → Ferrure 4 pieds) écrivant dans `health_events`
 - Fiches Vaccins (contenu IFCE, 4 vaccins en accordéon) accessible depuis Rappels vaccins
 - Échelle de gravité en dégradé couleur (vert→rouge, remplace les étoiles), lecture seule et sélection interactive
+- BoboWizard — Localisation : seule "Zone" est obligatoire ; Membre concerné/Région/Face (zone Membre) ou Côté (autres zones) sont des sélections indépendantes et facultatives (`pathology.has_laterality` n'est plus utilisé pour bloquer la progression)
 
 Tables Supabase existantes : `health_events`, `health_event_visits`, `farm_alerts`, `ambiance_photos`, `photo_tags`, `vaccinations`, `vaccine_exclusions`, `veterinaires`, `marechaux`, `invoices`, `invoices_staging`, `expenses` (RLS confirmé : Famille = ALL, Groom = aucun accès). `invoices`/`expenses` utilisées par l'écran Finances ; `invoices_staging` toujours sans code applicatif (réservée au pipeline OCR).
 
