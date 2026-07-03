@@ -91,18 +91,19 @@ export default function VaccinHistorySheet({ horseId, horseName, onClose }: Vacc
           ) : (
             filtered.map(v => {
               const def = VACCINES.find(d => d.dbType === v.vaccine_type)
+              const drLieu = [v.veterinarian, v.location].filter(Boolean).join(' · ')
               return (
                 <div key={v.id} className="bg-white rounded-xl shadow-xs px-4 py-3">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-bold text-gray-800">{def?.label ?? v.vaccine_type}</p>
+                    <p className="text-sm font-bold text-gray-800">
+                      {filter === 'tous' ? (def?.label ?? v.vaccine_type) : (drLieu || '—')}
+                    </p>
                     <p className="text-xs text-gray-500">
                       {new Date(v.injection_date + 'T00:00:00').toLocaleDateString('fr-FR')}
                     </p>
                   </div>
-                  {(v.veterinarian || v.location) && (
-                    <p className="text-[11px] text-gray-400 mt-1">
-                      {[v.veterinarian, v.location].filter(Boolean).join(' · ')}
-                    </p>
+                  {filter === 'tous' && drLieu && (
+                    <p className="text-[11px] text-gray-400 mt-1">{drLieu}</p>
                   )}
                 </div>
               )

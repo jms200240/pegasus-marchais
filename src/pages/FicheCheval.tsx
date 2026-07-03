@@ -225,17 +225,19 @@ export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChe
         </button>
 
         {/* Photo ou initiale */}
-        <div className="pt-14 pb-6 flex flex-col items-center gap-3">
-          <div className="w-24 h-24 rounded-2xl overflow-hidden border-4 border-white/30 shadow-xl flex items-center justify-center bg-black/20">
+        <div className="pt-14 pb-8 px-6 flex items-center gap-4">
+          <div className="w-40 h-40 rounded-2xl overflow-hidden border-4 border-white/30 shadow-xl flex items-center justify-center bg-black/20 flex-shrink-0">
             {HORSE_PHOTOS[horse.name] ?? horse.photo_url ? (
               <img src={HORSE_PHOTOS[horse.name] ?? horse.photo_url ?? undefined} alt={horse.name} className="w-full h-full object-cover" />
             ) : (
-              <span className="text-4xl font-black text-white/90">{horse.name.charAt(0)}</span>
+              <span className="text-5xl font-black text-white/90">{horse.name.charAt(0)}</span>
             )}
           </div>
 
-          <div className="text-center px-6">
-            <h1 className="text-2xl font-black text-white tracking-tight">{horse.name}</h1>
+          <div className="min-w-0">
+            <h1 className={`font-black text-white tracking-tight leading-tight whitespace-nowrap ${horse.name.length > 10 ? 'text-xl' : 'text-2xl'}`}>
+              {horse.name}
+            </h1>
             <p className="text-white/80 text-sm mt-0.5">
               {horse.race ?? 'Race inconnue'}
               {age !== null && <span> · {age} ans</span>}
