@@ -21,7 +21,7 @@ function Spinner() {
 // ─── Page Accueil ─────────────────────────────────────────────────────────────
 export default function Accueil() {
   const [alerts, setAlerts] = useState<Record<string, boolean>>({ foin: false, eau: false })
-  const [latestPhoto, setLatestPhoto] = useState<AmbiancePhoto | null>(null)
+  const [randomPhoto, setRandomPhoto] = useState<AmbiancePhoto | null>(null)
   const [loading, setLoading] = useState(true)
   const [visiteOpen, setVisiteOpen] = useState(false)
   const [visiteProOpen, setVisiteProOpen] = useState(false)
@@ -31,23 +31,21 @@ export default function Accueil() {
     try {
       const [
         { data: alertsData, error: alertsErr },
-        { data: photoData, error: photoErr },
+        { data: photosData, error: photosErr },
       ] = await Promise.all([
         supabase.from('farm_alerts').select('*'),
-        supabase
-          .from('ambiance_photos')
-          .select('*')
-          .order('visited_at', { ascending: false })
-          .limit(1),
+        supabase.from('ambiance_photos').select('*'),
       ])
       if (alertsErr) throw alertsErr
-      if (photoErr) throw photoErr
+      if (photosErr) throw photosErr
 
       const map: Record<string, boolean> = {}
       ;(alertsData as FarmAlert[] ?? []).forEach(a => { map[a.key] = a.active })
       setAlerts(map)
 
-      setLatestPhoto(photoData && photoData.length > 0 ? photoData[0] : null)
+      // Photo aléatoire, retirée à chaque ouverture de la page (pas la dernière).
+      const photos = (photosData as AmbiancePhoto[]) ?? []
+      setRandomPhoto(photos.length > 0 ? photos[Math.floor(Math.random() * photos.length)] : null)
     } catch (err) {
       console.error('Erreur chargement Accueil:', err)
     } finally {
@@ -117,32 +115,21 @@ export default function Accueil() {
                 Démarrer une visite
               </button>
 
-              {/* ── Bouton Démarrer une visite pro ── */}
-              <button
-                type="button"
-                onClick={() => setVisiteProOpen(true)}
-                className="w-full flex items-center justify-center gap-2 font-bold text-xs text-white rounded-xl shadow-sm active:scale-[0.98] transition-transform cursor-pointer"
-                style={{ backgroundColor: '#4A5FA0', minHeight: '40px' }}
-              >
-                <Stethoscope className="w-4 h-4" />
-                Démarrer une visite pro
-              </button>
-
-              {/* ── Dernière photo d'ambiance ── */}
+              {/* ── Photo d'ambiance (aléatoire à chaque ouverture) ── */}
               <section>
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
-                  Dernière photo
+                  Photo d'ambiance
                 </p>
 
-                {latestPhoto ? (
+                {randomPhoto ? (
                   <div className="bg-white rounded-xl overflow-hidden shadow-xs">
                     <img
-                      src={latestPhoto.photo_url}
-                      alt="Dernière photo d'ambiance"
+                      src={randomPhoto.thumbnail_url ?? randomPhoto.photo_url}
+                      alt="Photo d'ambiance"
                       className="w-full aspect-[4/3] object-cover"
                     />
                     <p className="text-[10px] text-gray-400 px-3 py-2">
-                      {formatDateTime(latestPhoto.visited_at)}
+                      {formatDateTime(randomPhoto.visited_at)}
                     </p>
                   </div>
                 ) : (
@@ -155,6 +142,17 @@ export default function Accueil() {
                   </div>
                 )}
               </section>
+
+              {/* ── Bouton Démarrer une visite pro ── */}
+              <button
+                type="button"
+                onClick={() => setVisiteProOpen(true)}
+                className="w-full flex items-center justify-center gap-2 font-bold text-xs text-white rounded-xl shadow-sm active:scale-[0.98] transition-transform cursor-pointer"
+                style={{ backgroundColor: '#4A5FA0', minHeight: '40px' }}
+              >
+                <Stethoscope className="w-4 h-4" />
+                Démarrer une visite pro
+              </button>
             </>
           )}
         </div>

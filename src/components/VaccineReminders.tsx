@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { ChevronDown, ChevronUp, Syringe, X, CheckCircle2 } from 'lucide-react'
 import type { Horse, Vaccination } from '../lib/types'
-import { VACCINES, computeStatus, type VaccineKey, type VaccineStatus, type VaccineSummary } from '../lib/vaccineUtils'
+import { VACCINES, computeStatus, type VaccineKey, type VaccineStatus } from '../lib/vaccineUtils'
 import VaccinFiches from './VaccinFiches'
 
-type VaccinationRow = Pick<Vaccination, 'horse_id' | 'injection_date' | 'vaccine_type'> & {
+type VaccinationRow = Pick<Vaccination, 'id' | 'horse_id' | 'injection_date' | 'vaccine_type'> & {
   next_reminder_override?: string | null
 }
 
@@ -22,6 +22,15 @@ interface HorseStatus {
   lastInjection: string | null
   nextDue: string | null
   daysLeft: number | null
+  lastRowId: string | null
+}
+
+interface ReminderGroup {
+  date: string
+  vaccineLabels: string[]
+  horseNames: string[]
+  allActive: boolean
+  rowIds: string[]
 }
 
 const STATUS_STYLE: Record<Status, { label: string; bg: string; text: string }> = {
@@ -32,11 +41,14 @@ const STATUS_STYLE: Record<Status, { label: string; bg: string; text: string }> 
   non_suivi: { label: 'Non suivi', bg: 'bg-gray-100', text: 'text-gray-500' },
 }
 
-interface VaccineRemindersProps {
-  onSummaryChange?: (summary: VaccineSummary | null) => void
+// Jointure "française" d'une liste : "A", "A et B", "A, B et C"
+function joinFr(items: string[]): string {
+  if (items.length === 0) return ''
+  if (items.length === 1) return items[0]
+  return `${items.slice(0, -1).join(', ')} et ${items[items.length - 1]}`
 }
 
-export default function VaccineReminders({ onSummaryChange }: VaccineRemindersProps = {}) {
+export default function VaccineReminders() {
   const [horses, setHorses] = useState<Horse[]>([])
   const [vaccinations, setVaccinations] = useState<VaccinationRow[]>([])
   const [exclusions, setExclusions] = useState<ExclusionRow[]>([])
@@ -45,11 +57,15 @@ export default function VaccineReminders({ onSummaryChange }: VaccineRemindersPr
   const [confirmTarget, setConfirmTarget] = useState<{ horse: Horse; vaccine: VaccineKey } | null>(null)
   const [fichesOpen, setFichesOpen] = useState(false)
 
+  // ── Édition de la date d'un groupe "Prochains vaccins" ────────────────────
+  const [pendingEdit, setPendingEdit] = useState<{ rowIds: string[]; date: string; label: string } | null>(null)
+  const [savingOverride, setSavingOverride] = useState(false)
+
   async function fetchData() {
     setLoading(true)
     const [{ data: horsesData, error: horsesErr }, { data: vaccData, error: vaccErr }, { data: exclData, error: exclErr }] = await Promise.all([
       supabase.from('horses').select('*').eq('is_active', true),
-      supabase.from('vaccinations').select('horse_id, injection_date, vaccine_type, next_reminder_override'),
+      supabase.from('vaccinations').select('id, horse_id, injection_date, vaccine_type, next_reminder_override'),
       supabase.from('vaccine_exclusions').select('horse_id, vaccine').eq('excluded', true),
     ])
     if (horsesErr) console.error('Erreur chargement chevaux (vaccins):', horsesErr)
@@ -83,7 +99,7 @@ export default function VaccineReminders({ onSummaryChange }: VaccineRemindersPr
           vaccine.tolerance,
           lastRow?.next_reminder_override ?? null
         )
-        return { horse: h, status, lastInjection, nextDue, daysLeft }
+        return { horse: h, status, lastInjection, nextDue, daysLeft, lastRowId: lastRow?.id ?? null }
       })
   }
 
@@ -97,6 +113,24 @@ export default function VaccineReminders({ onSummaryChange }: VaccineRemindersPr
     fetchData()
   }
 
+  async function handleConfirmDateEdit() {
+    if (!pendingEdit) return
+    setSavingOverride(true)
+    try {
+      const { error } = await supabase
+        .from('vaccinations')
+        .update({ next_reminder_override: pendingEdit.date })
+        .in('id', pendingEdit.rowIds)
+      if (error) throw error
+      setPendingEdit(null)
+      await fetchData()
+    } catch (err) {
+      console.error('Erreur mise à jour du rappel:', err)
+    } finally {
+      setSavingOverride(false)
+    }
+  }
+
   // ── Précalcul par vaccin, pour savoir si tout est à jour ──
   const perVaccine = VACCINES.map(vaccine => {
     const statuses = getHorseStatuses(vaccine)
@@ -105,22 +139,29 @@ export default function VaccineReminders({ onSummaryChange }: VaccineRemindersPr
   })
   const totalConcerned = perVaccine.reduce((sum, v) => sum + v.concerned.length, 0)
 
-  // ── Résumé "prochain vaccin" (date la plus proche, tous vaccins confondus) ──
-  const trackedStatuses = perVaccine
-    .flatMap(v => v.statuses)
-    .filter((s): s is typeof s & { nextDue: string } => s.status !== 'non_suivi' && !!s.nextDue)
-  const earliestDate = trackedStatuses.length > 0 ? trackedStatuses.map(s => s.nextDue).sort()[0] : null
-  const summaryHorseNames = earliestDate
-    ? [...new Set(trackedStatuses.filter(s => s.nextDue === earliestDate).map(s => s.horse.name))]
-    : []
-  const summary: VaccineSummary | null = earliestDate
-    ? { date: earliestDate, horseNames: summaryHorseNames, allActive: summaryHorseNames.length === horses.length }
-    : null
-
-  useEffect(() => {
-    onSummaryChange?.(summary)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [summary?.date, summaryHorseNames.join(','), horses.length])
+  // ── Groupes "Prochains vaccins", triés par échéance croissante ────────────
+  // (toutes les échéances connues, pas seulement celles proches — l'urgence
+  // reste visible via l'accordéon par statut ci-dessous)
+  const groupMap = new Map<string, { vaccineKeys: Set<VaccineKey>; horseNames: Set<string>; rowIds: Set<string> }>()
+  for (const { vaccine, statuses } of perVaccine) {
+    for (const s of statuses) {
+      if (!s.nextDue) continue
+      if (!groupMap.has(s.nextDue)) groupMap.set(s.nextDue, { vaccineKeys: new Set(), horseNames: new Set(), rowIds: new Set() })
+      const g = groupMap.get(s.nextDue)!
+      g.vaccineKeys.add(vaccine.key)
+      g.horseNames.add(s.horse.name)
+      if (s.lastRowId) g.rowIds.add(s.lastRowId)
+    }
+  }
+  const reminderGroups: ReminderGroup[] = [...groupMap.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([date, g]) => ({
+      date,
+      vaccineLabels: VACCINES.filter(v => g.vaccineKeys.has(v.key)).map(v => v.label),
+      horseNames: [...g.horseNames],
+      allActive: g.horseNames.size === horses.length,
+      rowIds: [...g.rowIds],
+    }))
 
   if (loading) return null
 
@@ -139,6 +180,39 @@ export default function VaccineReminders({ onSummaryChange }: VaccineRemindersPr
           Voir les fiches Vaccins
         </button>
       </div>
+
+      {/* ── Prochains vaccins, détaillé, triés par échéance croissante ── */}
+      {reminderGroups.length > 0 && (
+        <div className="space-y-2 mb-3">
+          {reminderGroups.map(group => (
+            <div key={group.date} className="bg-white rounded-xl shadow-xs px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-gray-800 truncate">{joinFr(group.vaccineLabels)}</p>
+                  <p className="text-[11px] text-gray-400 truncate">
+                    {group.allActive ? 'Tous' : group.horseNames.join(', ')}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <span className="text-[11px] text-gray-500">avant le</span>
+                  <input
+                    type="date"
+                    value={group.date}
+                    onChange={e =>
+                      setPendingEdit({
+                        rowIds: group.rowIds,
+                        date: e.target.value,
+                        label: `${joinFr(group.vaccineLabels)} — ${group.allActive ? 'Tous' : group.horseNames.join(', ')}`,
+                      })
+                    }
+                    className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 text-gray-700"
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {totalConcerned === 0 ? (
         <div className="flex items-center gap-2.5 bg-white rounded-xl px-4 py-3 shadow-xs">
@@ -240,6 +314,43 @@ export default function VaccineReminders({ onSummaryChange }: VaccineRemindersPr
                 className="flex-1 py-2 rounded-lg text-xs font-bold text-white bg-red-600 cursor-pointer"
               >
                 Confirmer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Popup confirmation nouvelle date de rappel ── */}
+      {pendingEdit && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 px-6">
+          <div className="bg-white rounded-xl p-5 w-full max-w-xs">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-bold text-gray-900">Date validée avec le vétérinaire ?</p>
+              <button onClick={() => setPendingEdit(null)} className="cursor-pointer">
+                <X className="w-4 h-4 text-gray-400" />
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mb-4">
+              <span className="font-semibold">{pendingEdit.label}</span> — nouvelle échéance :{' '}
+              <span className="font-semibold">
+                {new Date(pendingEdit.date + 'T00:00:00').toLocaleDateString('fr-FR')}
+              </span>
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPendingEdit(null)}
+                disabled={savingOverride}
+                className="flex-1 py-2 rounded-lg text-xs font-bold text-gray-500 bg-gray-50 cursor-pointer disabled:opacity-50"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleConfirmDateEdit}
+                disabled={savingOverride}
+                className="flex-1 py-2 rounded-lg text-xs font-bold text-white cursor-pointer disabled:opacity-50"
+                style={{ backgroundColor: '#2f6b3f' }}
+              >
+                {savingOverride ? 'Enregistrement…' : 'Valider'}
               </button>
             </div>
           </div>

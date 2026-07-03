@@ -4,6 +4,7 @@ import type { Horse, HealthEvent } from '../lib/types'
 import { CANONICAL_ORDER, HORSE_COLORS } from '../lib/types'
 import { ChevronRight, AlertCircle, Clock } from 'lucide-react'
 import SeverityScale from '../components/SeverityScale'
+import { HORSE_PHOTOS } from '../lib/horsePhotos'
 
 interface ChevauxProps {
   onSelectHorse: (id: string) => void
@@ -59,9 +60,9 @@ function HorseCard({
         <div
           className="w-11 h-11 rounded-xl flex-shrink-0 overflow-hidden flex items-center justify-center bg-black/15"
         >
-          {horse.photo_url ? (
+          {HORSE_PHOTOS[horse.name] ?? horse.photo_url ? (
             <img
-              src={horse.photo_url}
+              src={HORSE_PHOTOS[horse.name] ?? horse.photo_url ?? undefined}
               alt={horse.name}
               className="w-full h-full object-cover"
             />

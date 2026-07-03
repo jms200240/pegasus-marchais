@@ -1,22 +1,15 @@
 import { useState } from 'react'
-import { Plus, Syringe } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import BoboWizard from '../components/BoboWizard'
 import VaccineReminders from '../components/VaccineReminders'
 import { useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Horse } from '../lib/types'
-import type { VaccineSummary } from '../lib/vaccineUtils'
-
-function formatYmdFr(ymd: string): string {
-  const [y, m, d] = ymd.split('-').map(Number)
-  return new Date(y, m - 1, d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })
-}
 
 // ─── Page principale ─────────────────────────────────────────────────────────
 export default function Soins() {
   const [activeHorses, setActiveHorses] = useState<Horse[]>([])
   const [wizardOpen, setWizardOpen] = useState(false)
-  const [vaccineSummary, setVaccineSummary] = useState<VaccineSummary | null>(null)
 
   useEffect(() => {
     supabase.from('horses').select('*').eq('is_active', true).then(({ data }) => {
@@ -43,20 +36,8 @@ export default function Soins() {
             Signaler un bobo
           </button>
 
-          {/* ── Prochains vaccins (résumé) ── */}
-          {vaccineSummary && (
-            <div className="flex items-center gap-2.5 bg-white rounded-xl px-4 py-3 shadow-xs mb-3">
-              <Syringe className="w-4 h-4 flex-shrink-0 text-gray-400" />
-              <p className="text-xs text-gray-700">
-                <span className="font-bold">Prochains vaccins avant le {formatYmdFr(vaccineSummary.date)}</span>
-                {' — '}
-                {vaccineSummary.allActive ? 'Tous' : vaccineSummary.horseNames.join(', ')}
-              </p>
-            </div>
-          )}
-
           {/* ── Rappels vaccins ── */}
-          <VaccineReminders onSummaryChange={setVaccineSummary} />
+          <VaccineReminders />
         </div>
       </div>
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Horse, Genealogy, HealthEvent, Pathology } from '../lib/types'
 import { HORSE_COLORS, formatDate } from '../lib/types'
+import { HORSE_PHOTOS } from '../lib/horsePhotos'
 import {
   ArrowLeft, ExternalLink, Calendar, Award,
   AlertCircle, CheckCircle, User
@@ -152,8 +153,8 @@ export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChe
         {/* Photo ou initiale */}
         <div className="pt-14 pb-6 flex flex-col items-center gap-3">
           <div className="w-24 h-24 rounded-2xl overflow-hidden border-4 border-white/30 shadow-xl flex items-center justify-center bg-black/20">
-            {horse.photo_url ? (
-              <img src={horse.photo_url} alt={horse.name} className="w-full h-full object-cover" />
+            {HORSE_PHOTOS[horse.name] ?? horse.photo_url ? (
+              <img src={HORSE_PHOTOS[horse.name] ?? horse.photo_url ?? undefined} alt={horse.name} className="w-full h-full object-cover" />
             ) : (
               <span className="text-4xl font-black text-white/90">{horse.name.charAt(0)}</span>
             )}

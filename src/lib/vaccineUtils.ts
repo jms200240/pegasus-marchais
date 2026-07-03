@@ -1,6 +1,6 @@
-// ─── Domaine vaccins — cadences partagées entre VaccinSheet, VaccineReminders
-// et le résumé "Prochains vaccins" de Soins.tsx. Cf. Fiches Vaccins pour le
-// détail des protocoles (IFCE) qui ont fixé ces valeurs.
+// ─── Domaine vaccins — cadences partagées entre VaccinSheet et VaccineReminders
+// (accordéon + résumé "Prochains vaccins"). Cf. Fiches Vaccins pour le détail
+// des protocoles (IFCE) qui ont fixé ces valeurs.
 export type VaccineKey = 'Grippe' | 'Tetanos' | 'Rhino' | 'Rage'
 export type VaccineDbType = 'grippe' | 'tetanos' | 'rhino' | 'rage'
 
@@ -37,15 +37,6 @@ export function addDaysYmd(ymd: string, days: number): string {
 
 export function computeNextDueDate(injectionDate: string, cadenceDays: number): string {
   return addDaysYmd(injectionDate, cadenceDays)
-}
-
-// Résumé "prochain vaccin" affiché en tête de la page Soins — la date la
-// plus proche parmi tous les rappels suivis (hors "non suivi"), et les
-// chevaux concernés par cette échéance précise.
-export interface VaccineSummary {
-  date: string
-  horseNames: string[]
-  allActive: boolean
 }
 
 export function computeStatus(
