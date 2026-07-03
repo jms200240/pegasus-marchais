@@ -17,7 +17,7 @@ React + TypeScript + Tailwind CSS + Vite (PWA) · Supabase (PostgreSQL + Auth + 
 - **package.json** : ne jamais éditer via un éditeur rich text/Word (quotes typographiques → JSON cassé).
 - **BottomNav** : toute overlay plein écran doit avoir un padding bas ≥ `calc(1rem + 64px + env(safe-area-inset-bottom))`.
 - **Photos vétérinaires** : bundlées comme assets Vite statiques (pas Supabase Storage).
-- **Vaccinations** : rappels calculés en temps réel depuis l'historique brut (pas pré-calculés) ; exclusions permanentes.
+- **Vaccinations** : rappels calculés en temps réel depuis l'historique brut (pas pré-calculés) ; exclusions permanentes. `vaccinations.next_reminder_override` (nullable) permet de surcharger la date calculée sans casser ce principe — si absente, le calcul reste 100% dynamique.
 - **Contexte visite pro** : stocké en suffixe texte dans `note` (pas de colonne dédiée sur `health_event_visits`).
 - **UNRESOLVED_IMPORT** sur une image = toujours un fichier manquant/non commité, jamais un bug logique.
 - **Icônes manquantes** : sourcer depuis Tabler Icons ou dériver mathématiquement, pas de dessin main levée.
@@ -48,10 +48,17 @@ Opérationnel en production (`pegasus-marchais.vercel.app`) :
 - Fiches Vaccins (contenu IFCE, 4 vaccins en accordéon) accessible depuis Rappels vaccins
 - Échelle de gravité en dégradé couleur (vert→rouge, remplace les étoiles), lecture seule et sélection interactive
 - BoboWizard — Localisation : seule "Zone" est obligatoire ; Membre concerné/Région/Face (zone Membre) ou Côté (autres zones) sont des sélections indépendantes et facultatives (`pathology.has_laterality` n'est plus utilisé pour bloquer la progression)
+- Finances : menu réordonné (Suivi des coûts en premier), bloc "Total TTC payé" visible directement dans le menu
+- VaccinSheet : aperçu "Prochain rappel" groupé par date de cadence (ex. Grippe+Tétanos+Rage vs Rhino), date modifiable → `next_reminder_override`. Soins.tsx affiche un bandeau "Prochains vaccins avant le [date]" (échéance la plus proche, chevaux concernés)
+- Galerie : suppression de photo (Famille), partage/téléchargement corrigés (l'ancien téléchargement ignorait l'attribut `download` sur URL cross-origin), grille en miniatures + lazy-loading avec repli sur la photo pleine taille si pas de miniature
 
 Tables Supabase existantes : `health_events`, `health_event_visits`, `farm_alerts`, `ambiance_photos`, `photo_tags`, `vaccinations`, `vaccine_exclusions`, `veterinaires`, `marechaux`, `osteopathes`, `invoices`, `invoices_staging`, `expenses` (RLS confirmé : Famille = ALL, Groom = aucun accès). `invoices`/`expenses` utilisées par l'écran Finances ; `invoices_staging` toujours sans code applicatif (réservée au pipeline OCR).
 
 Restant à faire sur les workflows Visite pro : Soin véto, placeholder Dentiste (pathologies déjà identifiées : Troubles dentaires/surdents, à câbler quand ce workflow sera construit).
+
+En attente de schéma avant suite : `ambiance_photos.thumbnail_url` (colonne proposée, pas encore confirmée) — bloque la génération de miniature à l'upload dans VisiteProSheet/VisiteSheet (code prêt mais non committé pour ne pas casser l'upload en prod tant que la colonne n'existe pas).
+
+7 photos chevaux uploadées dans `src/assets/chevaux/` (cerise/echalote/fraise/hakea/pamplemousse/pistache/romarin.jpg) — pas encore câblées dans Chevaux.tsx/FicheCheval.tsx.
 
 ## Roadmap
 
