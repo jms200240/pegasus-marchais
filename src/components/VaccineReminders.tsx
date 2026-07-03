@@ -2,19 +2,19 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { ChevronDown, ChevronUp, Syringe, X, CheckCircle2 } from 'lucide-react'
 import type { Horse, Vaccination } from '../lib/types'
+import { VACCINES, computeStatus, type VaccineKey, type VaccineStatus, type VaccineSummary } from '../lib/vaccineUtils'
 import VaccinFiches from './VaccinFiches'
 
-type VaccineKey = 'Grippe' | 'Tetanos' | 'Rhino' | 'Rage'
-type VaccineDbType = 'grippe' | 'tetanos' | 'rhino' | 'rage'
-
-type VaccinationRow = Pick<Vaccination, 'horse_id' | 'injection_date' | 'vaccine_type'>
+type VaccinationRow = Pick<Vaccination, 'horse_id' | 'injection_date' | 'vaccine_type'> & {
+  next_reminder_override?: string | null
+}
 
 interface ExclusionRow {
   horse_id: string
   vaccine: VaccineKey
 }
 
-type Status = 'a_jour' | 'a_prevoir' | 'en_retard' | 'primo_a_refaire' | 'non_suivi'
+type Status = VaccineStatus
 
 interface HorseStatus {
   horse: Horse
@@ -24,13 +24,6 @@ interface HorseStatus {
   daysLeft: number | null
 }
 
-const VACCINES: { key: VaccineKey; label: string; dbType: VaccineDbType; cadence: number; alertWindow: number; tolerance: number }[] = [
-  { key: 'Grippe', label: 'Grippe', dbType: 'grippe', cadence: 365, alertWindow: 60, tolerance: 180 },
-  { key: 'Tetanos', label: 'Tétanos', dbType: 'tetanos', cadence: 365, alertWindow: 60, tolerance: 180 },
-  { key: 'Rhino', label: 'Rhinopneumonie', dbType: 'rhino', cadence: 180, alertWindow: 30, tolerance: 180 },
-  { key: 'Rage', label: 'Rage', dbType: 'rage', cadence: 365, alertWindow: 60, tolerance: 180 },
-]
-
 const STATUS_STYLE: Record<Status, { label: string; bg: string; text: string }> = {
   a_jour: { label: 'À jour', bg: 'bg-green-50', text: 'text-green-700' },
   a_prevoir: { label: 'À prévoir', bg: 'bg-amber-50', text: 'text-amber-700' },
@@ -39,26 +32,11 @@ const STATUS_STYLE: Record<Status, { label: string; bg: string; text: string }> 
   non_suivi: { label: 'Non suivi', bg: 'bg-gray-100', text: 'text-gray-500' },
 }
 
-function computeStatus(lastInjection: string | null, cadence: number, alertWindow: number, tolerance: number) {
-  if (!lastInjection) {
-    return { status: 'non_suivi' as Status, nextDue: null, daysLeft: null }
-  }
-  const last = new Date(lastInjection)
-  const due = new Date(last)
-  due.setDate(due.getDate() + cadence)
-  const today = new Date()
-  const daysLeft = Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-
-  let status: Status
-  if (daysLeft > alertWindow) status = 'a_jour'
-  else if (daysLeft >= 0) status = 'a_prevoir'
-  else if (Math.abs(daysLeft) <= tolerance) status = 'en_retard'
-  else status = 'primo_a_refaire'
-
-  return { status, nextDue: due.toISOString().slice(0, 10), daysLeft }
+interface VaccineRemindersProps {
+  onSummaryChange?: (summary: VaccineSummary | null) => void
 }
 
-export default function VaccineReminders() {
+export default function VaccineReminders({ onSummaryChange }: VaccineRemindersProps = {}) {
   const [horses, setHorses] = useState<Horse[]>([])
   const [vaccinations, setVaccinations] = useState<VaccinationRow[]>([])
   const [exclusions, setExclusions] = useState<ExclusionRow[]>([])
@@ -71,7 +49,7 @@ export default function VaccineReminders() {
     setLoading(true)
     const [{ data: horsesData, error: horsesErr }, { data: vaccData, error: vaccErr }, { data: exclData, error: exclErr }] = await Promise.all([
       supabase.from('horses').select('*').eq('is_active', true),
-      supabase.from('vaccinations').select('horse_id, injection_date, vaccine_type'),
+      supabase.from('vaccinations').select('horse_id, injection_date, vaccine_type, next_reminder_override'),
       supabase.from('vaccine_exclusions').select('horse_id, vaccine').eq('excluded', true),
     ])
     if (horsesErr) console.error('Erreur chargement chevaux (vaccins):', horsesErr)
@@ -94,10 +72,17 @@ export default function VaccineReminders() {
       .filter(h => !isExcluded(h.id, vaccine.key))
       .map(h => {
         const rows = vaccinations.filter(v => v.horse_id === h.id && v.vaccine_type === vaccine.dbType)
-        const lastInjection = rows.length > 0
-          ? rows.reduce((max, r) => (r.injection_date > max ? r.injection_date : max), rows[0].injection_date)
+        const lastRow = rows.length > 0
+          ? rows.reduce((max, r) => (r.injection_date > max.injection_date ? r : max), rows[0])
           : null
-        const { status, nextDue, daysLeft } = computeStatus(lastInjection, vaccine.cadence, vaccine.alertWindow, vaccine.tolerance)
+        const lastInjection = lastRow?.injection_date ?? null
+        const { status, nextDue, daysLeft } = computeStatus(
+          lastInjection,
+          vaccine.cadence,
+          vaccine.alertWindow,
+          vaccine.tolerance,
+          lastRow?.next_reminder_override ?? null
+        )
         return { horse: h, status, lastInjection, nextDue, daysLeft }
       })
   }
@@ -112,8 +97,6 @@ export default function VaccineReminders() {
     fetchData()
   }
 
-  if (loading) return null
-
   // ── Précalcul par vaccin, pour savoir si tout est à jour ──
   const perVaccine = VACCINES.map(vaccine => {
     const statuses = getHorseStatuses(vaccine)
@@ -121,6 +104,25 @@ export default function VaccineReminders() {
     return { vaccine, statuses, concerned }
   })
   const totalConcerned = perVaccine.reduce((sum, v) => sum + v.concerned.length, 0)
+
+  // ── Résumé "prochain vaccin" (date la plus proche, tous vaccins confondus) ──
+  const trackedStatuses = perVaccine
+    .flatMap(v => v.statuses)
+    .filter((s): s is typeof s & { nextDue: string } => s.status !== 'non_suivi' && !!s.nextDue)
+  const earliestDate = trackedStatuses.length > 0 ? trackedStatuses.map(s => s.nextDue).sort()[0] : null
+  const summaryHorseNames = earliestDate
+    ? [...new Set(trackedStatuses.filter(s => s.nextDue === earliestDate).map(s => s.horse.name))]
+    : []
+  const summary: VaccineSummary | null = earliestDate
+    ? { date: earliestDate, horseNames: summaryHorseNames, allActive: summaryHorseNames.length === horses.length }
+    : null
+
+  useEffect(() => {
+    onSummaryChange?.(summary)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [summary?.date, summaryHorseNames.join(','), horses.length])
+
+  if (loading) return null
 
   return (
     <section className="mb-6">

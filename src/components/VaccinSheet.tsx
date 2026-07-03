@@ -2,9 +2,10 @@ import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Horse } from '../lib/types'
 import { CANONICAL_ORDER, HORSE_COLORS } from '../lib/types'
+import { vaccineByDbType, computeNextDueDate, type VaccineDbType } from '../lib/vaccineUtils'
 import { X, Syringe, Check } from 'lucide-react'
 
-type VaccineType = 'grippe' | 'tetanos' | 'rhino' | 'rage'
+type VaccineType = VaccineDbType
 
 const VACCINE_LABELS: Record<VaccineType, string> = {
   grippe: 'Grippe',
@@ -14,6 +15,29 @@ const VACCINE_LABELS: Record<VaccineType, string> = {
 }
 
 const VACCINE_ORDER: VaccineType[] = ['grippe', 'tetanos', 'rhino', 'rage']
+
+interface ReminderGroup {
+  vaccines: VaccineType[]
+  defaultDate: string
+}
+
+function groupKey(vaccines: VaccineType[]): string {
+  return [...vaccines].sort().join('+')
+}
+
+function computeReminderGroups(vaccines: Set<VaccineType>, injectionDate: string): ReminderGroup[] {
+  const byDate = new Map<string, VaccineType[]>()
+  for (const v of vaccines) {
+    const def = vaccineByDbType(v)
+    if (!def) continue
+    const date = computeNextDueDate(injectionDate, def.cadence)
+    if (!byDate.has(date)) byDate.set(date, [])
+    byDate.get(date)!.push(v)
+  }
+  return [...byDate.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([defaultDate, vs]) => ({ vaccines: vs, defaultDate }))
+}
 
 interface VaccinSheetProps {
   horses: Horse[]
@@ -37,6 +61,10 @@ export default function VaccinSheet({
   const [veterinarian, setVeterinarian] = useState(defaultVeterinarian ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // ── Prochain rappel (aperçu modifiable, groupé par date) ──────────────────
+  const [dateEdits, setDateEdits] = useState<Record<string, string>>({})
+  const reminderGroups = injectionDate ? computeReminderGroups(selectedVaccines, injectionDate) : []
 
   const sortedHorses = [...horses].sort((a, b) => {
     const ia = CANONICAL_ORDER.indexOf(a.name as typeof CANONICAL_ORDER[number])
@@ -94,16 +122,24 @@ export default function VaccinSheet({
         injection_date: string
         location: string | null
         veterinarian: string | null
+        next_reminder_override: string | null
       }[] = []
 
       for (const horseId of selectedHorseIds) {
         for (const vaccine of selectedVaccines) {
+          const def = vaccineByDbType(vaccine)
+          const defaultDue = def ? computeNextDueDate(injectionDate, def.cadence) : null
+          const group = reminderGroups.find(g => g.vaccines.includes(vaccine))
+          const effectiveDate = group ? (dateEdits[groupKey(group.vaccines)] ?? group.defaultDate) : null
+          const override = effectiveDate && effectiveDate !== defaultDue ? effectiveDate : null
+
           rows.push({
             horse_id: horseId,
             vaccine_type: vaccine,
             injection_date: injectionDate,
             location: location.trim() || null,
             veterinarian: veterinarian.trim() || null,
+            next_reminder_override: override,
           })
         }
       }
@@ -220,6 +256,37 @@ export default function VaccinSheet({
               className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 text-gray-700"
             />
           </section>
+
+          {/* ── Prochain rappel (aperçu, modifiable) ── */}
+          {reminderGroups.length > 0 && (
+            <section>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
+                Prochain rappel
+              </p>
+              <div className="space-y-2">
+                {reminderGroups.map(group => {
+                  const key = groupKey(group.vaccines)
+                  const value = dateEdits[key] ?? group.defaultDate
+                  return (
+                    <div key={key} className="bg-white rounded-xl shadow-xs p-3 space-y-1.5">
+                      <p className="text-xs font-bold text-gray-700">
+                        {group.vaccines.map(v => VACCINE_LABELS[v]).join(' + ')}
+                      </p>
+                      <input
+                        type="date"
+                        value={value}
+                        onChange={e => setDateEdits(prev => ({ ...prev, [key]: e.target.value }))}
+                        className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 text-gray-700"
+                      />
+                      <p className="text-[11px] text-gray-400">
+                        {allSelected ? 'Tous les chevaux' : sortedHorses.filter(h => selectedHorseIds.has(h.id)).map(h => h.name).join(', ')}
+                      </p>
+                    </div>
+                  )
+                })}
+              </div>
+            </section>
+          )}
 
           {/* ── Vétérinaire ── */}
           <section>
