@@ -140,28 +140,31 @@ export default function GenealogyTreeSheet({ onClose, onSelectHorse, focusHorseI
               {Array.from(groups.values()).map((g, idx) => {
                 const childRowY = g.children[0]?.y ?? g.anchorY
                 const isCouple = !!g.coupleParents
-                // Les couples routent leur bus au milieu de l'intervalle entre
-                // rangées (plutôt que sur le bord des boîtes enfants) — et ce,
-                // même si les deux parents ne sont pas au même niveau de lignée
-                // (ex. Haricot × Hyacinthe pour Lichen/Muscade).
-                const busY = isCouple ? childRowY - ROW_GAP / 2 : childRowY
                 const spreadXs = [
                   ...(g.coupleParents ? g.coupleParents.map(p => p.x) : [g.anchorX]),
                   ...g.children.map(c => c.x),
                 ]
                 const minX = Math.min(...spreadXs)
                 const maxX = Math.max(...spreadXs)
+                const needsSpread = minX !== maxX
+                // Les couples rejoignent leurs enfants dès le bas de leurs
+                // propres boîtes (pas de palier intermédiaire), comme dans
+                // l'organigramme source. Les rangées "solo" à plusieurs
+                // enfants (ou décalées) utilisent un palier au milieu de
+                // l'intervalle pour ne jamais se confondre avec un couple
+                // impliquant le même parent (ex. Pomme seule vs Pomme × Haricot).
+                const busY = isCouple ? g.anchorY : (needsSpread ? childRowY - ROW_GAP / 2 : childRowY)
                 return (
                   <g key={idx} stroke="#C0B4A6" strokeWidth={1.8} fill="none">
                     {g.coupleParents ? (
                       g.coupleParents.map((p, i) => (
-                        <line key={'p' + i} x1={p.x} y1={p.y} x2={p.x} y2={busY} />
+                        p.y !== busY ? <line key={'p' + i} x1={p.x} y1={p.y} x2={p.x} y2={busY} /> : null
                       ))
                     ) : (
                       <line x1={g.anchorX} y1={g.anchorY} x2={g.anchorX} y2={busY} />
                     )}
-                    {minX !== maxX && <line x1={minX} y1={busY} x2={maxX} y2={busY} />}
-                    {isCouple && g.children.map((c, i) => (
+                    {needsSpread && <line x1={minX} y1={busY} x2={maxX} y2={busY} />}
+                    {(isCouple || needsSpread) && g.children.map((c, i) => (
                       <line key={'c' + i} x1={c.x} y1={busY} x2={c.x} y2={c.y} />
                     ))}
                   </g>

@@ -30,6 +30,59 @@ export function getDeathYear(horse: Horse): number | null {
   return horse.died_at ? new Date(horse.died_at).getFullYear() : null
 }
 
+// ─── Disposition fixe, reprise de l'organigramme HTML source ────────────────
+// L'utilisateur a demandé de reprendre telles quelles les positions relatives
+// de cet organigramme (vérifié correct malgré son manque d'élégance visuelle)
+// plutôt qu'un placement automatique — un algorithme générique (barycentre,
+// DFS...) ne peut pas deviner qu'il faut laisser Harissa/H hors du passage du
+// connecteur Haricot × Hyacinthe, par exemple. Chaque position ci-dessous a
+// été vérifiée à la main pour qu'aucun connecteur ne passe au niveau d'un
+// cheval qui lui est étranger. Hyacinthe est alignée sur la rangée de Haricot
+// (son co-parent pour Lichen/Muscade) plutôt que sur sa profondeur de lignée
+// stricte ; Epinard II passe en demi-rangée pour lui laisser la place.
+const MASTER_POSITIONS: Record<string, { row: number; col: number }> = {
+  // Rangée 0 — fondateurs / individus sans ascendance connue dans la cavalerie
+  'Cerise (1977)': { row: 0, col: 0 },
+  'Fitrio': { row: 0, col: 1 },
+  'Olga': { row: 0, col: 2 },
+  'Radis': { row: 0, col: 3 },
+  'Qualitat': { row: 0, col: 4 },
+  'Gamin': { row: 0, col: 5 },
+  'Romarin': { row: 0, col: 6 },
+  'Cerise': { row: 0, col: 7 },      // Cervoise de Champfort (active, Dartmoor)
+  'Fraise': { row: 0, col: 8 },      // Faveur de Champfort (active, Dartmoor)
+  'Azalée': { row: 0, col: 9 },
+  'Capucine': { row: 0, col: 10 },
+
+  // Demi-rangée — Epinard II (enfant d'Olga, avant Hyacinthe)
+  'Epinard II': { row: 0.5, col: 2 },
+
+  // Rangée 1
+  'Pomme': { row: 1, col: 0 },
+  'Haricot': { row: 1, col: 1 },
+  'Hyacinthe': { row: 1, col: 2 },   // alignée sur Haricot, cf. note ci-dessus
+  'Harissa': { row: 1, col: 9 },     // hors du passage du connecteur Haricot × Hyacinthe
+  'H': { row: 1, col: 10 },
+
+  // Rangée 2
+  'Chataigne': { row: 2, col: 0 },
+  'Litchi': { row: 2, col: 1 },      // Pomme × Haricot, adjacent à Kwetsche pour Nectarine
+  'Kwetsche': { row: 2, col: 2 },
+  'Cassis': { row: 2, col: 3 },
+  'Haschich': { row: 2, col: 4 },
+  'Lichen': { row: 2, col: 5 },      // Haricot × Hyacinthe
+  'Muscade': { row: 2, col: 6 },     // Haricot × Hyacinthe
+
+  // Rangée 3
+  'Échalote': { row: 3, col: 0 },
+  'Hakéa': { row: 3, col: 1 },
+  'Nectarine': { row: 3, col: 2 },   // Kwetsche × Litchi
+
+  // Rangée 4
+  'Pamplemousse': { row: 4, col: 0 },
+  'Pistache': { row: 4, col: 1 },
+}
+
 export interface TreeNode {
   horse: Horse
   row: number
@@ -90,13 +143,10 @@ export function collectBloodline(horseId: string, horses: Horse[], genealogy: Ge
   return result
 }
 
-// Calcule (génération, colonne) pour chaque cheval du sous-ensemble donné
-// (ou tous si non précisé). Génération = profondeur de lignée (pere_id/mere_id
-// uniquement, pdm exclu du calcul). Colonnes : méthode du barycentre (à la
-// Sugiyama) — chaque cheval est positionné à la moyenne des colonnes de ses
-// parents internes, rangée par rangée du haut vers le bas, ce qui rapproche
-// naturellement les couples et évite qu'un cheval sans lien ne s'intercale
-// visuellement entre deux parents reliés par un même enfant.
+// Calcule (rangée, colonne) pour chaque cheval du sous-ensemble donné (ou
+// tous si non précisé), à partir de la disposition fixe ci-dessus. Un cheval
+// absent de la table (ne devrait pas arriver avec les 29 individus actuels)
+// est replié en rangée 0, à la suite des colonnes déjà utilisées.
 export function computeLayout(horses: Horse[], genealogy: Genealogy[], subsetIds?: Set<string>): TreeLayout {
   const genByHorseId = new Map(genealogy.map(g => [g.horse_id, g]))
   const include = (id: string) => !subsetIds || subsetIds.has(id)
@@ -107,55 +157,22 @@ export function computeLayout(horses: Horse[], genealogy: Genealogy[], subsetIds
     return [g.pere_id, g.mere_id].filter((id): id is string => !!id && include(id))
   }
 
-  const generationCache = new Map<string, number>()
-  function generation(horseId: string): number {
-    if (generationCache.has(horseId)) return generationCache.get(horseId)!
-    const parents = internalParents(horseId)
-    const gen = parents.length === 0 ? 0 : 1 + Math.max(...parents.map(generation))
-    generationCache.set(horseId, gen)
-    return gen
-  }
-
   const relevantHorses = horses.filter(h => include(h.id))
-  const sortKey = (h: Horse) => `${(getBirthYear(h) ?? 9999).toString().padStart(4, '0')}_${h.name}`
 
-  const rowOf = new Map<string, number>()
-  const byRow = new Map<number, Horse[]>()
-  let maxRow = 0
-  for (const h of relevantHorses) {
-    const row = generation(h.id)
-    rowOf.set(h.id, row)
-    maxRow = Math.max(maxRow, row)
-    if (!byRow.has(row)) byRow.set(row, [])
-    byRow.get(row)!.push(h)
-  }
-
-  const colOf = new Map<string, number>()
-  const colsPerRow = new Map<number, number>()
-
-  for (let row = 0; row <= maxRow; row++) {
-    const rowHorses = byRow.get(row) ?? []
-    const ordered = rowHorses.slice().sort((a, b) => {
-      if (row === 0) return sortKey(a).localeCompare(sortKey(b))
-      const parentsA = internalParents(a.id).map(id => colOf.get(id) ?? 0)
-      const parentsB = internalParents(b.id).map(id => colOf.get(id) ?? 0)
-      const baryA = parentsA.length > 0 ? parentsA.reduce((s, v) => s + v, 0) / parentsA.length : Infinity
-      const baryB = parentsB.length > 0 ? parentsB.reduce((s, v) => s + v, 0) / parentsB.length : Infinity
-      if (baryA !== baryB) return baryA - baryB
-      return sortKey(a).localeCompare(sortKey(b))
-    })
-    ordered.forEach((h, idx) => colOf.set(h.id, idx))
-    colsPerRow.set(row, ordered.length)
-  }
-
+  let fallbackCol = Math.max(0, ...Object.values(MASTER_POSITIONS).filter(p => p.row === 0).map(p => p.col)) + 1
   const nodes = new Map<string, TreeNode>()
+  let maxRow = 0
+  const colsPerRow = new Map<number, number>()
   for (const h of relevantHorses) {
-    nodes.set(h.id, { horse: h, row: rowOf.get(h.id)!, col: colOf.get(h.id)! })
+    const pos = MASTER_POSITIONS[h.name] ?? { row: 0, col: fallbackCol++ }
+    nodes.set(h.id, { horse: h, row: pos.row, col: pos.col })
+    maxRow = Math.max(maxRow, pos.row)
+    colsPerRow.set(pos.row, Math.max(colsPerRow.get(pos.row) ?? 0, pos.col + 1))
   }
 
   const edges: TreeEdge[] = relevantHorses
     .map(h => ({ childId: h.id, parentIds: internalParents(h.id) }))
     .filter(e => e.parentIds.length > 0)
 
-  return { nodes, edges, maxRow, colsPerRow }
+  return { nodes, edges, maxRow: Math.ceil(maxRow), colsPerRow }
 }
