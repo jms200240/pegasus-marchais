@@ -141,17 +141,25 @@ export default function GenealogyTreeSheet({ onClose, onSelectHorse, focusHorseI
               height={canvasHeight}
             >
               {Array.from(groups.values()).map((g, idx) => {
+                const childRowY = g.children[0]?.y ?? g.anchorY
+                const isCouple = !!g.coupleLine
+                // Les couples routent leur bus au milieu de l'intervalle entre
+                // rangées (plutôt que sur le bord des boîtes enfants) pour ne
+                // pas sembler toucher des chevaux non apparentés au passage.
+                const busY = isCouple ? childRowY - ROW_GAP / 2 : childRowY
                 const xs = [g.anchorX, ...g.children.map(c => c.x)]
                 const minX = Math.min(...xs)
                 const maxX = Math.max(...xs)
-                const childRowY = g.children[0]?.y ?? g.anchorY
                 return (
                   <g key={idx} stroke="#C0B4A6" strokeWidth={1.8} fill="none">
                     {g.coupleLine && (
                       <line x1={g.coupleLine.x1} y1={g.coupleLine.y1} x2={g.coupleLine.x2} y2={g.coupleLine.y2} />
                     )}
-                    <line x1={g.anchorX} y1={g.anchorY} x2={g.anchorX} y2={childRowY} />
-                    {minX !== maxX && <line x1={minX} y1={childRowY} x2={maxX} y2={childRowY} />}
+                    <line x1={g.anchorX} y1={g.anchorY} x2={g.anchorX} y2={busY} />
+                    {minX !== maxX && <line x1={minX} y1={busY} x2={maxX} y2={busY} />}
+                    {isCouple && g.children.map((c, i) => (
+                      <line key={i} x1={c.x} y1={busY} x2={c.x} y2={c.y} />
+                    ))}
                   </g>
                 )
               })}

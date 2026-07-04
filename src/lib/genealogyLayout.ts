@@ -91,11 +91,13 @@ export function collectBloodline(horseId: string, horses: Horse[], genealogy: Ge
 }
 
 // Calcule (génération, colonne) pour chaque cheval du sous-ensemble donné
-// (ou tous si non précisé), en clusterisant les familles par parcours DFS
-// trié par année de naissance — approche générique qui retombe naturellement
-// sur un layout lisible sans coordonnées codées en dur.
+// (ou tous si non précisé). Génération = profondeur de lignée (pere_id/mere_id
+// uniquement, pdm exclu du calcul). Colonnes : méthode du barycentre (à la
+// Sugiyama) — chaque cheval est positionné à la moyenne des colonnes de ses
+// parents internes, rangée par rangée du haut vers le bas, ce qui rapproche
+// naturellement les couples et évite qu'un cheval sans lien ne s'intercale
+// visuellement entre deux parents reliés par un même enfant.
 export function computeLayout(horses: Horse[], genealogy: Genealogy[], subsetIds?: Set<string>): TreeLayout {
-  const horseById = new Map(horses.map(h => [h.id, h]))
   const genByHorseId = new Map(genealogy.map(g => [g.horse_id, g]))
   const include = (id: string) => !subsetIds || subsetIds.has(id)
 
@@ -115,47 +117,40 @@ export function computeLayout(horses: Horse[], genealogy: Genealogy[], subsetIds
   }
 
   const relevantHorses = horses.filter(h => include(h.id))
+  const sortKey = (h: Horse) => `${(getBirthYear(h) ?? 9999).toString().padStart(4, '0')}_${h.name}`
 
-  const childrenOf = new Map<string, string[]>()
+  const rowOf = new Map<string, number>()
+  const byRow = new Map<number, Horse[]>()
+  let maxRow = 0
   for (const h of relevantHorses) {
-    for (const p of internalParents(h.id)) {
-      if (!childrenOf.has(p)) childrenOf.set(p, [])
-      childrenOf.get(p)!.push(h.id)
-    }
+    const row = generation(h.id)
+    rowOf.set(h.id, row)
+    maxRow = Math.max(maxRow, row)
+    if (!byRow.has(row)) byRow.set(row, [])
+    byRow.get(row)!.push(h)
   }
-  for (const arr of childrenOf.values()) {
-    arr.sort((a, b) => (getBirthYear(horseById.get(a)!) ?? 9999) - (getBirthYear(horseById.get(b)!) ?? 9999))
-  }
-
-  const roots = relevantHorses
-    .filter(h => internalParents(h.id).length === 0)
-    .sort((a, b) => (getBirthYear(a) ?? 9999) - (getBirthYear(b) ?? 9999))
 
   const colOf = new Map<string, number>()
-  const rowOf = new Map<string, number>()
-  const nextColByRow = new Map<number, number>()
+  const colsPerRow = new Map<number, number>()
 
-  function visit(horseId: string) {
-    if (colOf.has(horseId)) return
-    const row = generation(horseId)
-    const col = nextColByRow.get(row) ?? 0
-    nextColByRow.set(row, col + 1)
-    colOf.set(horseId, col)
-    rowOf.set(horseId, row)
-    for (const childId of childrenOf.get(horseId) ?? []) visit(childId)
+  for (let row = 0; row <= maxRow; row++) {
+    const rowHorses = byRow.get(row) ?? []
+    const ordered = rowHorses.slice().sort((a, b) => {
+      if (row === 0) return sortKey(a).localeCompare(sortKey(b))
+      const parentsA = internalParents(a.id).map(id => colOf.get(id) ?? 0)
+      const parentsB = internalParents(b.id).map(id => colOf.get(id) ?? 0)
+      const baryA = parentsA.length > 0 ? parentsA.reduce((s, v) => s + v, 0) / parentsA.length : Infinity
+      const baryB = parentsB.length > 0 ? parentsB.reduce((s, v) => s + v, 0) / parentsB.length : Infinity
+      if (baryA !== baryB) return baryA - baryB
+      return sortKey(a).localeCompare(sortKey(b))
+    })
+    ordered.forEach((h, idx) => colOf.set(h.id, idx))
+    colsPerRow.set(row, ordered.length)
   }
-  for (const r of roots) visit(r.id)
-  for (const h of relevantHorses) visit(h.id) // filet de sécurité, ne devrait rien ajouter
 
   const nodes = new Map<string, TreeNode>()
-  let maxRow = 0
-  const colsPerRow = new Map<number, number>()
   for (const h of relevantHorses) {
-    const row = rowOf.get(h.id)!
-    const col = colOf.get(h.id)!
-    nodes.set(h.id, { horse: h, row, col })
-    maxRow = Math.max(maxRow, row)
-    colsPerRow.set(row, Math.max(colsPerRow.get(row) ?? 0, col + 1))
+    nodes.set(h.id, { horse: h, row: rowOf.get(h.id)!, col: colOf.get(h.id)! })
   }
 
   const edges: TreeEdge[] = relevantHorses
