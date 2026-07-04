@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Horse, HealthEvent } from '../lib/types'
 import { CANONICAL_ORDER, HORSE_COLORS } from '../lib/types'
-import { ChevronRight, AlertCircle, Clock } from 'lucide-react'
+import { ChevronRight, ChevronDown, ChevronUp, AlertCircle, Clock, GitBranch } from 'lucide-react'
 import SeverityScale from '../components/SeverityScale'
 import { HORSE_PHOTOS } from '../lib/horsePhotos'
+import GenealogyTreeSheet from '../components/GenealogyTreeSheet'
 
 interface ChevauxProps {
   onSelectHorse: (id: string) => void
@@ -114,6 +115,8 @@ export default function Chevaux({ onSelectHorse }: ChevauxProps) {
   const [activeEvents, setActiveEvents] = useState<Record<string, HealthEvent[]>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [historicalOpen, setHistoricalOpen] = useState(false)
+  const [treeOpen, setTreeOpen] = useState(false)
 
   useEffect(() => {
     async function fetchData() {
@@ -220,42 +223,57 @@ export default function Chevaux({ onSelectHorse }: ChevauxProps) {
           </div>
         )}
 
+        {/* ── Arbre généalogique ── */}
+        <button
+          type="button"
+          onClick={() => setTreeOpen(true)}
+          className="w-full flex items-center justify-center gap-2 bg-white border border-gray-200 rounded-xl py-3 mb-6 text-sm font-bold text-gray-700 cursor-pointer hover:border-primary/40 transition-colors active:scale-[0.98]"
+        >
+          <GitBranch className="w-4 h-4 text-primary" />
+          Arbre généalogique
+        </button>
+
         {/* ── Cavalerie historique ── */}
         {historicalHorses.length > 0 && (
           <>
-            <div className="flex items-center gap-2 mb-3">
-              <Clock className="w-3 h-3 text-gray-400" />
-              <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                Cavalerie historique
-              </span>
-              <span className="text-xs text-gray-400">({historicalHorses.length})</span>
-            </div>
-            <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-              {historicalHorses.map((horse, idx) => (
-                <button
-                  key={horse.id}
-                  onClick={() => onSelectHorse(horse.id)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors cursor-pointer ${
-                    idx < historicalHorses.length - 1 ? 'border-b border-gray-100' : ''
-                  }`}
-                >
-                  <div
-                    className="w-7 h-7 rounded-lg flex-shrink-0 flex items-center justify-center text-white text-xs font-bold"
-                    style={{ backgroundColor: horse.color_hex ?? '#9ca3af' }}
-                  >
-                    {horse.name.charAt(0)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <span className="text-sm font-semibold text-gray-600 truncate block">{horse.name}</span>
-                    {horse.race && <span className="text-xs text-gray-400">{horse.race}</span>}
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0" />
-                </button>
-              ))}
-            </div>
+            <button
+              type="button"
+              onClick={() => setHistoricalOpen(!historicalOpen)}
+              className="w-full flex items-center justify-between gap-2 mb-3 cursor-pointer"
+            >
+              <div className="flex items-center gap-2">
+                <Clock className="w-3 h-3 text-gray-400" />
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                  Cavalerie historique
+                </span>
+                <span className="text-xs text-gray-400">({historicalHorses.length})</span>
+              </div>
+              {historicalOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+            </button>
+
+            {historicalOpen && (
+              <div className="mb-6">
+                {historicalHorses.map(horse => (
+                  <HorseCard
+                    key={horse.id}
+                    horse={horse}
+                    activeEvents={[]}
+                    onClick={() => onSelectHorse(horse.id)}
+                  />
+                ))}
+              </div>
+            )}
           </>
         )}
       </div>
+
+      {/* ── Arbre généalogique complet ── */}
+      {treeOpen && (
+        <GenealogyTreeSheet
+          onClose={() => setTreeOpen(false)}
+          onSelectHorse={id => { setTreeOpen(false); onSelectHorse(id) }}
+        />
+      )}
     </div>
   )
 }

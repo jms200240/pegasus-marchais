@@ -7,10 +7,11 @@ import { VACCINES, computeStatus } from '../lib/vaccineUtils'
 import {
   ArrowLeft, ExternalLink, Award,
   AlertCircle, CheckCircle, User, Syringe, Wrench,
-  ChevronDown, ChevronUp
+  ChevronDown, ChevronUp, GitBranch
 } from 'lucide-react'
 import BoboCard from '../components/BoboCard'
 import VaccinHistorySheet from '../components/VaccinHistorySheet'
+import GenealogyTreeSheet from '../components/GenealogyTreeSheet'
 
 interface FicheChevalProps {
   horseId: string
@@ -94,6 +95,7 @@ function CollapsibleSection({
 export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChevalProps) {
   const [horse, setHorse] = useState<Horse | null>(null)
   const [genealogy, setGenealogy] = useState<Genealogy | null>(null)
+  const [allGenealogy, setAllGenealogy] = useState<Pick<Genealogy, 'horse_id' | 'pere_id' | 'mere_id'>[]>([])
   const [healthEvents, setHealthEvents] = useState<HealthEvent[]>([])
   const [vaccinations, setVaccinations] = useState<Vaccination[]>([])
   const [allHorses, setAllHorses] = useState<Pick<Horse, 'id' | 'name' | 'color_hex' | 'is_active'>[]>([])
@@ -106,6 +108,7 @@ export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChe
   const [soinsOpen, setSoinsOpen] = useState(false)
   const [bobosOpen, setBobosOpen] = useState(false)
   const [vaccinHistoryOpen, setVaccinHistoryOpen] = useState(false)
+  const [treeOpen, setTreeOpen] = useState(false)
 
   useEffect(() => {
     async function fetchData() {
@@ -115,12 +118,14 @@ export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChe
       try {
         const [{ data: horseData, error: horseErr },
                { data: geneData, error: geneErr },
+               { data: allGeneData, error: allGeneErr },
                { data: eventsData, error: eventsErr },
                { data: vaccData, error: vaccErr },
                { data: horsesAll, error: horsesAllErr },
                { data: pathoData, error: pathoErr }] = await Promise.all([
           supabase.from('horses').select('*').eq('id', horseId).single(),
           supabase.from('genealogy').select('*').eq('horse_id', horseId).maybeSingle(),
+          supabase.from('genealogy').select('horse_id, pere_id, mere_id'),
           supabase.from('health_events').select('*').eq('horse_id', horseId).order('opened_at', { ascending: false }),
           supabase.from('vaccinations').select('*').eq('horse_id', horseId),
           supabase.from('horses').select('id, name, color_hex, is_active'),
@@ -129,6 +134,7 @@ export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChe
 
         if (horseErr) throw horseErr
         if (geneErr) throw geneErr
+        if (allGeneErr) throw allGeneErr
         if (eventsErr) throw eventsErr
         if (vaccErr) throw vaccErr
         if (horsesAllErr) throw horsesAllErr
@@ -136,6 +142,7 @@ export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChe
 
         setHorse(horseData)
         setGenealogy(geneData ?? null)
+        setAllGenealogy(allGeneData ?? [])
         setHealthEvents(eventsData ?? [])
         setVaccinations(vaccData ?? [])
         setAllHorses(horsesAll ?? [])
@@ -212,6 +219,12 @@ export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChe
   const fatherHorse = findHorseById(genealogy?.pere_id ?? null)
   const motherHorse = findHorseById(genealogy?.mere_id ?? null)
   const pdmHorse = findHorseById(genealogy?.pdm_id ?? null)
+
+  // Descendance : chevaux dont ce cheval est père ou mère (résolution inverse)
+  const descendants = allGenealogy
+    .filter(g => g.pere_id === horse.id || g.mere_id === horse.id)
+    .map(g => findHorseById(g.horse_id))
+    .filter((h): h is Pick<Horse, 'id' | 'name' | 'color_hex' | 'is_active'> => !!h)
 
   return (
     <div className="flex-1 flex flex-col overflow-y-auto no-scrollbar">
@@ -320,7 +333,7 @@ export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChe
               )}
               {/* Père de mère */}
               {genealogy.pdm_name && (
-                <div className="flex justify-between items-center py-2.5">
+                <div className={`flex justify-between items-center py-2.5 ${descendants.length > 0 ? 'border-b border-gray-100/80' : ''}`}>
                   <span className="text-xs text-gray-500 font-medium">Père de mère</span>
                   {pdmHorse ? (
                     <button
@@ -335,11 +348,40 @@ export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChe
                   )}
                 </div>
               )}
+              {/* Descendance */}
+              {descendants.length > 0 && (
+                <div className="flex justify-between items-start py-2.5">
+                  <span className="text-xs text-gray-500 font-medium pt-0.5">Descendance</span>
+                  <div className="flex flex-wrap justify-end gap-x-1.5 gap-y-1 max-w-[65%]">
+                    {descendants.map((d, idx) => (
+                      <button
+                        key={d.id}
+                        onClick={() => onSelectHorse(d.id)}
+                        className="text-xs font-bold text-primary flex items-center gap-1 cursor-pointer"
+                      >
+                        {d.name}{idx < descendants.length - 1 ? ',' : ''}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </>
         )}
 
-        {/* ── Vaccins ── */}
+        {/* ── Lien vers l'arbre généalogique ciblé ── */}
+        <button
+          type="button"
+          onClick={() => setTreeOpen(true)}
+          className="mt-3 w-full flex items-center justify-between px-4 py-3 bg-white rounded-xl shadow-xs cursor-pointer hover:bg-gray-50 transition-colors"
+        >
+          <span className="text-sm font-semibold text-primary">Voir dans l'arbre généalogique</span>
+          <GitBranch className="w-4 h-4 text-primary" />
+        </button>
+
+        {/* ── Vaccins / Soins / Bobos (cavalerie active uniquement) ── */}
+        {horse.is_active && (
+        <>
         <CollapsibleSection
           icon={Syringe}
           title="Vaccins"
@@ -446,6 +488,8 @@ export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChe
             </div>
           )}
         </CollapsibleSection>
+        </>
+        )}
       </div>
 
       {/* ── Historique vaccinal complet ── */}
@@ -454,6 +498,15 @@ export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChe
           horseId={horseId}
           horseName={horse.name}
           onClose={() => setVaccinHistoryOpen(false)}
+        />
+      )}
+
+      {/* ── Arbre généalogique ciblé sur ce cheval ── */}
+      {treeOpen && (
+        <GenealogyTreeSheet
+          focusHorseId={horse.id}
+          onClose={() => setTreeOpen(false)}
+          onSelectHorse={id => { setTreeOpen(false); onSelectHorse(id) }}
         />
       )}
     </div>
