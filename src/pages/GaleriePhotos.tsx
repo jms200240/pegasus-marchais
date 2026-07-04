@@ -322,12 +322,14 @@ function PhotoViewer({
   photo,
   horses,
   users,
+  readOnly = false,
   onClose,
   onDeleted,
 }: {
   photo: AmbiancePhoto
   horses: Horse[]
   users: SimpleUser[]
+  readOnly?: boolean
   onClose: () => void
   onDeleted: (photoId: string) => void
 }) {
@@ -504,13 +506,15 @@ function PhotoViewer({
             {formatDateTime(photo.visited_at)}
           </span>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setConfirmDelete(true)}
-              className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 cursor-pointer hover:bg-red-500/30"
-            >
-              <Trash2 className="w-4 h-4 text-white" />
-            </button>
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(true)}
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 cursor-pointer hover:bg-red-500/30"
+              >
+                <Trash2 className="w-4 h-4 text-white" />
+              </button>
+            )}
             <button
               type="button"
               onClick={onClose}
@@ -548,10 +552,10 @@ function PhotoViewer({
                         key={t.id}
                         label={t.label}
                         color={HORSE_COLORS[t.label] ?? '#2f6b3f'}
-                        onRemove={() => removeTag(t.id)}
+                        onRemove={readOnly ? undefined : () => removeTag(t.id)}
                       />
                     ))}
-                    {!showHorsePicker && (
+                    {!readOnly && !showHorsePicker && (
                       <button
                         type="button"
                         onClick={() => setShowHorsePicker(true)}
@@ -561,7 +565,7 @@ function PhotoViewer({
                       </button>
                     )}
                   </div>
-                  {showHorsePicker && (
+                  {!readOnly && showHorsePicker && (
                     <TagPicker
                       options={sortedHorses.map(h => ({
                         id: h.id,
@@ -581,9 +585,9 @@ function PhotoViewer({
                   <p className="text-[10px] text-white/50 mb-1.5">Humains</p>
                   <div className="flex flex-wrap gap-1.5">
                     {humanTags.map(t => (
-                      <TagChip key={t.id} label={t.label} color="#6B7280" onRemove={() => removeTag(t.id)} />
+                      <TagChip key={t.id} label={t.label} color="#6B7280" onRemove={readOnly ? undefined : () => removeTag(t.id)} />
                     ))}
-                    {!showHumanPicker && (
+                    {!readOnly && !showHumanPicker && (
                       <button
                         type="button"
                         onClick={() => setShowHumanPicker(true)}
@@ -593,7 +597,7 @@ function PhotoViewer({
                       </button>
                     )}
                   </div>
-                  {showHumanPicker && (
+                  {!readOnly && showHumanPicker && (
                     <TagPicker
                       options={users.map(u => ({ id: u.id, label: u.name ?? 'Sans nom', color: '#6B7280' }))}
                       suggestions={humanSuggestions}
@@ -679,7 +683,7 @@ function PhotoViewer({
 }
 
 // ─── Page Galerie ─────────────────────────────────────────────────────────────
-export default function GaleriePhotos() {
+export default function GaleriePhotos({ readOnly = false }: { readOnly?: boolean }) {
   const [photos, setPhotos] = useState<AmbiancePhoto[]>([])
   const [horses, setHorses] = useState<Horse[]>([])
   const [users, setUsers] = useState<SimpleUser[]>([])
@@ -816,21 +820,6 @@ export default function GaleriePhotos() {
 
   const missingThumbCount = photos.filter(p => !p.thumbnail_url && p.storage_path).length
 
-  const grouped: { dateLabel: string; items: AmbiancePhoto[] }[] = []
-  for (const photo of filteredPhotos) {
-    const dateLabel = new Date(photo.visited_at).toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: 'long',
-      year: 'numeric',
-    })
-    const group = grouped.find(g => g.dateLabel === dateLabel)
-    if (group) {
-      group.items.push(photo)
-    } else {
-      grouped.push({ dateLabel, items: [photo] })
-    }
-  }
-
   return (
     <>
       <div className="flex-1 flex flex-col">
@@ -865,7 +854,7 @@ export default function GaleriePhotos() {
         </div>
 
         <div className="flex-1 overflow-y-auto no-scrollbar px-4 pb-6">
-          {!loading && missingThumbCount > 0 && (
+          {!readOnly && !loading && missingThumbCount > 0 && (
             <button
               type="button"
               onClick={handleGenerateMissingThumbnails}
@@ -898,31 +887,22 @@ export default function GaleriePhotos() {
               </p>
             </div>
           ) : (
-            <div className="space-y-5">
-              {grouped.map(group => (
-                <div key={group.dateLabel}>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
-                    {group.dateLabel}
-                  </p>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {group.items.map(photo => (
-                      <button
-                        key={photo.id}
-                        type="button"
-                        onClick={() => setSelectedPhoto(photo)}
-                        className="aspect-square rounded-lg overflow-hidden bg-gray-100 cursor-pointer"
-                      >
-                        <img
-                          src={photo.thumbnail_url ?? photo.photo_url}
-                          alt="Photo d'ambiance"
-                          loading="lazy"
-                          decoding="async"
-                          className="w-full h-full object-cover"
-                        />
-                      </button>
-                    ))}
-                  </div>
-                </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              {filteredPhotos.map(photo => (
+                <button
+                  key={photo.id}
+                  type="button"
+                  onClick={() => setSelectedPhoto(photo)}
+                  className="aspect-square rounded-lg overflow-hidden bg-gray-100 cursor-pointer"
+                >
+                  <img
+                    src={photo.thumbnail_url ?? photo.photo_url}
+                    alt="Photo d'ambiance"
+                    loading="lazy"
+                    decoding="async"
+                    className="w-full h-full object-cover"
+                  />
+                </button>
               ))}
             </div>
           )}
@@ -934,6 +914,7 @@ export default function GaleriePhotos() {
           photo={selectedPhoto}
           horses={horses}
           users={users}
+          readOnly={readOnly}
           onClose={() => setSelectedPhoto(null)}
           onDeleted={handlePhotoDeleted}
         />

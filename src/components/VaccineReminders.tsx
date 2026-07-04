@@ -48,7 +48,7 @@ function joinFr(items: string[]): string {
   return `${items.slice(0, -1).join(', ')} et ${items[items.length - 1]}`
 }
 
-export default function VaccineReminders() {
+export default function VaccineReminders({ readOnly = false }: { readOnly?: boolean }) {
   const [horses, setHorses] = useState<Horse[]>([])
   const [vaccinations, setVaccinations] = useState<VaccinationRow[]>([])
   const [exclusions, setExclusions] = useState<ExclusionRow[]>([])
@@ -209,6 +209,7 @@ export default function VaccineReminders() {
                   <input
                     type="date"
                     value={group.date}
+                    disabled={readOnly}
                     onChange={e =>
                       setPendingEdit({
                         rowIds: group.rowIds,
@@ -216,7 +217,7 @@ export default function VaccineReminders() {
                         label: `${joinFr(group.vaccineLabels)} — ${group.allActive ? 'Tous' : group.horseNames.join(', ')}`,
                       })
                     }
-                    className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 text-gray-700"
+                    className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 text-gray-700 disabled:opacity-60 disabled:bg-gray-50"
                   />
                 </div>
               </div>
@@ -296,13 +297,15 @@ export default function VaccineReminders() {
                             {STATUS_STYLE[s.status].label}
                           </span>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setConfirmTarget({ horse: s.horse, vaccine: vaccine.key })}
-                          className="text-[10px] font-bold text-gray-400 hover:text-red-600 uppercase tracking-wide cursor-pointer"
-                        >
-                          Annuler le rappel
-                        </button>
+                        {!readOnly && (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmTarget({ horse: s.horse, vaccine: vaccine.key })}
+                            className="text-[10px] font-bold text-gray-400 hover:text-red-600 uppercase tracking-wide cursor-pointer"
+                          >
+                            Annuler le rappel
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>

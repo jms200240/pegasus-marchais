@@ -19,7 +19,7 @@ function Spinner() {
 }
 
 // ─── Page Accueil ─────────────────────────────────────────────────────────────
-export default function Accueil() {
+export default function Accueil({ readOnly = false }: { readOnly?: boolean }) {
   const [alerts, setAlerts] = useState<Record<string, boolean>>({ foin: false, eau: false })
   const [randomPhoto, setRandomPhoto] = useState<AmbiancePhoto | null>(null)
   const [loading, setLoading] = useState(true)
@@ -105,15 +105,17 @@ export default function Accueil() {
               )}
 
               {/* ── Bouton Démarrer une visite ── */}
-              <button
-                type="button"
-                onClick={() => setVisiteOpen(true)}
-                className="w-full flex items-center justify-center gap-2.5 font-bold text-sm text-white rounded-xl shadow-sm active:scale-[0.98] transition-transform cursor-pointer"
-                style={{ backgroundColor: '#2f6b3f', minHeight: '56px' }}
-              >
-                <CalendarCheck className="w-5 h-5" />
-                Démarrer une visite
-              </button>
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={() => setVisiteOpen(true)}
+                  className="w-full flex items-center justify-center gap-2.5 font-bold text-sm text-white rounded-xl shadow-sm active:scale-[0.98] transition-transform cursor-pointer"
+                  style={{ backgroundColor: '#2f6b3f', minHeight: '56px' }}
+                >
+                  <CalendarCheck className="w-5 h-5" />
+                  Démarrer une visite
+                </button>
+              )}
 
               {/* ── Photo d'ambiance (aléatoire à chaque ouverture) ── */}
               <section>
@@ -144,15 +146,17 @@ export default function Accueil() {
               </section>
 
               {/* ── Bouton Démarrer une visite pro ── */}
-              <button
-                type="button"
-                onClick={() => setVisiteProOpen(true)}
-                className="w-full flex items-center justify-center gap-2 font-bold text-xs text-white rounded-xl shadow-sm active:scale-[0.98] transition-transform cursor-pointer"
-                style={{ backgroundColor: '#4A5FA0', minHeight: '40px' }}
-              >
-                <Stethoscope className="w-4 h-4" />
-                Démarrer une visite pro
-              </button>
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={() => setVisiteProOpen(true)}
+                  className="w-full flex items-center justify-center gap-2 font-bold text-xs text-white rounded-xl shadow-sm active:scale-[0.98] transition-transform cursor-pointer"
+                  style={{ backgroundColor: '#4A5FA0', minHeight: '40px' }}
+                >
+                  <Stethoscope className="w-4 h-4" />
+                  Démarrer une visite pro
+                </button>
+              )}
             </>
           )}
         </div>

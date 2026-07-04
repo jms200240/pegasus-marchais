@@ -16,15 +16,16 @@ export type TabType = 'accueil' | 'soins' | 'chevaux' | 'galerie' | 'finances'
 interface BottomNavProps {
   activeTab: TabType
   setActiveTab: (tab: TabType) => void
+  showFinances?: boolean
 }
 
-export default function BottomNav({ activeTab, setActiveTab }: BottomNavProps) {
+export default function BottomNav({ activeTab, setActiveTab, showFinances = true }: BottomNavProps) {
   const tabs = [
     { id: 'accueil' as TabType, label: 'Accueil', icon: Home },
     { id: 'soins' as TabType, label: 'Soins', icon: Stethoscope },
     { id: 'chevaux' as TabType, label: 'Chevaux', icon: HorseIcon },
     { id: 'galerie' as TabType, label: 'Galerie', icon: Image },
-    { id: 'finances' as TabType, label: 'Finances', icon: DollarSign },
+    ...(showFinances ? [{ id: 'finances' as TabType, label: 'Finances', icon: DollarSign }] : []),
   ]
 
   return (

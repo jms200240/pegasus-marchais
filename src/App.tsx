@@ -4,6 +4,7 @@ import Login from './pages/Login'
 import BottomNav from './components/BottomNav'
 import type { TabType } from './components/BottomNav'
 import type { Session } from '@supabase/supabase-js'
+import { useUserRole } from './lib/useUserRole'
 
 // Pages
 import Accueil from './pages/Accueil'
@@ -17,6 +18,8 @@ function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<TabType>('accueil')
+  const role = useUserRole(session)
+  const readOnly = role === 'visiteur'
 
   // Navigation "intra-onglet" pour le module Chevaux
   // null = liste, string = id du cheval sélectionné
@@ -49,9 +52,9 @@ function App() {
   const renderActivePage = () => {
     switch (activeTab) {
       case 'accueil':
-        return <Accueil />
+        return <Accueil readOnly={readOnly} />
       case 'soins':
-        return <Soins />
+        return <Soins readOnly={readOnly} />
       case 'chevaux':
         // Routing intra-onglet : liste ou fiche
         if (selectedHorseId) {
@@ -65,11 +68,11 @@ function App() {
         }
         return <Chevaux onSelectHorse={(id) => setSelectedHorseId(id)} />
       case 'galerie':
-        return <GaleriePhotos />
+        return <GaleriePhotos readOnly={readOnly} />
       case 'finances':
-        return <Finances />
+        return role === 'famille' ? <Finances /> : <Accueil readOnly={readOnly} />
       default:
-        return <Accueil />
+        return <Accueil readOnly={readOnly} />
     }
   }
 
@@ -128,7 +131,7 @@ function App() {
             className="fixed bottom-0 left-0 right-0 z-[100] w-full max-w-[390px] mx-auto"
             style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
           >
-            <BottomNav activeTab={activeTab} setActiveTab={handleTabChange} />
+            <BottomNav activeTab={activeTab} setActiveTab={handleTabChange} showFinances={role === 'famille'} />
           </div>
         </>
       )}
