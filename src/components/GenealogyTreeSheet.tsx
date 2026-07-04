@@ -26,8 +26,6 @@ function boxY(node: TreeNode) { return MARGIN + node.row * ROW_H }
 function centerX(node: TreeNode) { return boxX(node) + BOX_W / 2 }
 function bottomY(node: TreeNode) { return boxY(node) + BOX_H }
 function topY(node: TreeNode) { return boxY(node) }
-function leftX(node: TreeNode) { return boxX(node) }
-function rightX(node: TreeNode) { return boxX(node) + BOX_W }
 
 function yearLabel(horse: Horse): string {
   const born = getBirthYear(horse)
@@ -85,18 +83,23 @@ export default function GenealogyTreeSheet({ onClose, onSelectHorse, focusHorseI
   const canvasHeight = MARGIN * 2 + (maxRow + 1) * ROW_H - ROW_GAP
 
   // ── Regroupement des connecteurs par ancre (parent seul ou couple) ──
+  // Un couple (2 parents internes) est traité comme tel dès que la relation
+  // est déclarée, que les deux parents partagent ou non la même génération
+  // (ex. Haricot × Hyacinthe — parents de Lichen/Muscade — ne sont pas au
+  // même niveau de lignée, mais forment bien un couple d'après l'organigramme
+  // source). Chaque parent descend vers un bus commun avant de rejoindre l'enfant.
   interface Group {
     anchorX: number
     anchorY: number
-    coupleLine?: { x1: number; y1: number; x2: number; y2: number }
+    coupleParents?: { x: number; y: number }[]
     children: { x: number; y: number }[]
   }
   const groups = new Map<string, Group>()
 
-  function addChild(key: string, anchorX: number, anchorY: number, coupleLine: Group['coupleLine'], childPt: { x: number; y: number }) {
+  function addChild(key: string, anchorX: number, anchorY: number, coupleParents: Group['coupleParents'], childPt: { x: number; y: number }) {
     let g = groups.get(key)
     if (!g) {
-      g = { anchorX, anchorY, coupleLine, children: [] }
+      g = { anchorX, anchorY, coupleParents, children: [] }
       groups.set(key, g)
     }
     g.children.push(childPt)
@@ -113,18 +116,12 @@ export default function GenealogyTreeSheet({ onClose, onSelectHorse, focusHorseI
       addChild('single:' + p.horse.id, centerX(p), bottomY(p), undefined, childPt)
     } else if (parentNodes.length === 2) {
       const [a, b] = parentNodes
-      if (a.row === b.row) {
-        const left = a.col < b.col ? a : b
-        const right = a.col < b.col ? b : a
-        const midY = topY(left) + BOX_H / 2
-        const midX = (rightX(left) + leftX(right)) / 2
-        const key = 'couple:' + [a.horse.id, b.horse.id].sort().join('+')
-        addChild(key, midX, midY, { x1: rightX(left), y1: midY, x2: leftX(right), y2: midY }, childPt)
-      } else {
-        for (const p of parentNodes) {
-          addChild('single:' + p.horse.id, centerX(p), bottomY(p), undefined, childPt)
-        }
-      }
+      const midX = (centerX(a) + centerX(b)) / 2
+      const key = 'couple:' + [a.horse.id, b.horse.id].sort().join('+')
+      addChild(key, midX, Math.max(bottomY(a), bottomY(b)), [
+        { x: centerX(a), y: bottomY(a) },
+        { x: centerX(b), y: bottomY(b) },
+      ], childPt)
     }
   }
 
@@ -142,23 +139,30 @@ export default function GenealogyTreeSheet({ onClose, onSelectHorse, focusHorseI
             >
               {Array.from(groups.values()).map((g, idx) => {
                 const childRowY = g.children[0]?.y ?? g.anchorY
-                const isCouple = !!g.coupleLine
+                const isCouple = !!g.coupleParents
                 // Les couples routent leur bus au milieu de l'intervalle entre
-                // rangées (plutôt que sur le bord des boîtes enfants) pour ne
-                // pas sembler toucher des chevaux non apparentés au passage.
+                // rangées (plutôt que sur le bord des boîtes enfants) — et ce,
+                // même si les deux parents ne sont pas au même niveau de lignée
+                // (ex. Haricot × Hyacinthe pour Lichen/Muscade).
                 const busY = isCouple ? childRowY - ROW_GAP / 2 : childRowY
-                const xs = [g.anchorX, ...g.children.map(c => c.x)]
-                const minX = Math.min(...xs)
-                const maxX = Math.max(...xs)
+                const spreadXs = [
+                  ...(g.coupleParents ? g.coupleParents.map(p => p.x) : [g.anchorX]),
+                  ...g.children.map(c => c.x),
+                ]
+                const minX = Math.min(...spreadXs)
+                const maxX = Math.max(...spreadXs)
                 return (
                   <g key={idx} stroke="#C0B4A6" strokeWidth={1.8} fill="none">
-                    {g.coupleLine && (
-                      <line x1={g.coupleLine.x1} y1={g.coupleLine.y1} x2={g.coupleLine.x2} y2={g.coupleLine.y2} />
+                    {g.coupleParents ? (
+                      g.coupleParents.map((p, i) => (
+                        <line key={'p' + i} x1={p.x} y1={p.y} x2={p.x} y2={busY} />
+                      ))
+                    ) : (
+                      <line x1={g.anchorX} y1={g.anchorY} x2={g.anchorX} y2={busY} />
                     )}
-                    <line x1={g.anchorX} y1={g.anchorY} x2={g.anchorX} y2={busY} />
                     {minX !== maxX && <line x1={minX} y1={busY} x2={maxX} y2={busY} />}
                     {isCouple && g.children.map((c, i) => (
-                      <line key={i} x1={c.x} y1={busY} x2={c.x} y2={c.y} />
+                      <line key={'c' + i} x1={c.x} y1={busY} x2={c.x} y2={c.y} />
                     ))}
                   </g>
                 )
