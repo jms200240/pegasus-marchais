@@ -139,6 +139,17 @@ export default function VaccineReminders() {
   })
   const totalConcerned = perVaccine.reduce((sum, v) => sum + v.concerned.length, 0)
 
+  // ── Date de la dernière injection connue, par vaccin (toutes cavalerie confondue) ──
+  const lastInjectionDates = VACCINES
+    .map(vaccine => {
+      const rows = vaccinations.filter(v => v.vaccine_type === vaccine.dbType)
+      if (rows.length === 0) return null
+      const last = rows.reduce((max, r) => (r.injection_date > max ? r.injection_date : max), rows[0].injection_date)
+      return { label: vaccine.label, last }
+    })
+    .filter((d): d is { label: string; last: string } => !!d)
+    .sort((a, b) => b.last.localeCompare(a.last))
+
   // ── Groupes "Prochains vaccins", triés par échéance croissante ────────────
   // (toutes les échéances connues, pas seulement celles proches — l'urgence
   // reste visible via l'accordéon par statut ci-dessous)
@@ -215,9 +226,23 @@ export default function VaccineReminders() {
       )}
 
       {totalConcerned === 0 ? (
-        <div className="flex items-center gap-2.5 bg-white rounded-xl px-4 py-3 shadow-xs">
-          <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: '#2f6b3f' }} />
-          <span className="text-sm font-semibold text-gray-700">Vaccins à jour</span>
+        <div className="bg-white rounded-xl shadow-xs overflow-hidden">
+          <div className="flex items-center gap-2.5 px-4 py-3">
+            <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: '#2f6b3f' }} />
+            <span className="text-sm font-semibold text-gray-700">Vaccins à jour</span>
+          </div>
+          {lastInjectionDates.length > 0 && (
+            <div className="border-t border-gray-100 divide-y divide-gray-50">
+              {lastInjectionDates.map(d => (
+                <div key={d.label} className="flex items-center justify-between px-4 py-2">
+                  <span className="text-xs text-gray-500">{d.label}</span>
+                  <span className="text-xs font-semibold text-gray-700">
+                    {new Date(d.last + 'T00:00:00').toLocaleDateString('fr-FR')}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-2">

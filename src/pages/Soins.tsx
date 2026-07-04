@@ -3,6 +3,7 @@ import { Plus } from 'lucide-react'
 import BoboWizard from '../components/BoboWizard'
 import VaccineReminders from '../components/VaccineReminders'
 import SoinReminders from '../components/SoinReminders'
+import DernieresVisitesPro from '../components/DernieresVisitesPro'
 import { useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Horse } from '../lib/types'
@@ -42,6 +43,9 @@ export default function Soins() {
 
           {/* ── Rappels soins ── */}
           <SoinReminders />
+
+          {/* ── Dernières visites pro ── */}
+          <DernieresVisitesPro />
         </div>
       </div>
 

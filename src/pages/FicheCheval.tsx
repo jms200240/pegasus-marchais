@@ -373,7 +373,7 @@ export default function FicheCheval({ horseId, onBack, onSelectHorse }: FicheChe
         <button
           type="button"
           onClick={() => setTreeOpen(true)}
-          className="mt-3 w-full flex items-center justify-between px-4 py-3 bg-white rounded-xl shadow-xs cursor-pointer hover:bg-gray-50 transition-colors"
+          className="mt-3 w-full flex items-center justify-between px-4 py-3 bg-white border-2 border-primary rounded-xl shadow-xs cursor-pointer hover:bg-primary/5 transition-colors"
         >
           <span className="text-sm font-semibold text-primary">Voir dans l'arbre généalogique</span>
           <GitBranch className="w-4 h-4 text-primary" />
