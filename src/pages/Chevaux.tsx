@@ -227,7 +227,7 @@ export default function Chevaux({ onSelectHorse }: ChevauxProps) {
         <button
           type="button"
           onClick={() => setTreeOpen(true)}
-          className="w-full flex items-center justify-center gap-2 bg-white border border-gray-200 rounded-xl py-3 mb-6 text-sm font-bold text-gray-700 cursor-pointer hover:border-primary/40 transition-colors active:scale-[0.98]"
+          className="w-full flex items-center justify-center gap-2 bg-white border-2 border-primary rounded-xl py-3 mb-6 text-sm font-bold text-primary cursor-pointer hover:bg-primary/5 transition-colors active:scale-[0.98]"
         >
           <GitBranch className="w-4 h-4 text-primary" />
           Arbre généalogique
