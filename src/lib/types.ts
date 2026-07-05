@@ -220,14 +220,18 @@ export interface QuizQuestion {
   reponse_c: string
   reponse_d: string
   bonne_reponse: QuizAnswer
-  niveau: QuizNiveau
+  niveau: QuizNiveau | null      // null pour les lots "Galop" (culture générale équestre)
+  galop: number | null          // 1 à 7 — niveau Galop FFE, alternative à `niveau` selon le lot
   points: number
-  categorie: string             // 'Maladies' | 'Parasites' | 'Vaccins' | 'Généalogie' | autres à venir
+  categorie: string             // 'Maladies' | 'Parasites' | 'Vaccins' | 'Généalogie' | 'Robes' | ... (ouvert)
   thematique: string | null
+  lot: string | null             // libellé du lot d'origine (traçabilité import)
   // Polymorphe selon categorie : uuid pathologies.id (Maladies/Parasites),
   // nom de vaccin en texte libre (Vaccins), ou slug nom de cheval (Généalogie).
+  // Absent (null) pour les lots sans ressource associée (ex. culture générale Galop).
   source_id: string | null
   is_active: boolean
+  reported: boolean             // signalée comme mal posée — exclue de la rotation tant que non corrigée
   created_at: string
 }
 

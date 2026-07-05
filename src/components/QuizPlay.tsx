@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { X, Check, ExternalLink } from 'lucide-react'
+import { X, Check, ExternalLink, Flag } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { QuizQuestion, QuizAnswer, Pathology, Horse } from '../lib/types'
 import { ANSWER_KEYS, shuffle, resourceTypeForCategorie, resolveVaccineDbType, slugify } from '../lib/quizUtils'
@@ -49,16 +49,23 @@ export default function QuizPlay({ userId, onFinish }: QuizPlayProps) {
   useEffect(() => {
     async function load() {
       setLoading(true)
-      const [{ data: qData }, { data: hData }] = await Promise.all([
-        supabase.from('quiz_questions').select('*').eq('is_active', true),
+      const [{ data: qData }, { data: hData }, { data: attemptsData }] = await Promise.all([
+        supabase.from('quiz_questions').select('*').eq('is_active', true).eq('reported', false),
         supabase.from('horses').select('*'),
+        supabase.from('quiz_attempts').select('question_id').eq('user_id', userId),
       ])
-      setQuestions(shuffle((qData as QuizQuestion[]) ?? []).slice(0, SESSION_SIZE))
+      const allQuestions = (qData as QuizQuestion[]) ?? []
+      const askedIds = new Set((attemptsData as { question_id: string }[] ?? []).map(a => a.question_id))
+      const remaining = allQuestions.filter(q => !askedIds.has(q.id))
+      // Une fois toutes les questions posées à cet utilisateur, on repart sur
+      // l'ensemble complet (les points/tentatives déjà enregistrés ne sont pas effacés).
+      const pool = remaining.length > 0 ? remaining : allQuestions
+      setQuestions(shuffle(pool).slice(0, SESSION_SIZE))
       setHorses((hData as Horse[]) ?? [])
       setLoading(false)
     }
     load()
-  }, [])
+  }, [userId])
 
   const current = questions[index]
   const isLast = index === questions.length - 1
@@ -81,6 +88,17 @@ export default function QuizPlay({ userId, onFinish }: QuizPlayProps) {
   }
 
   function handleNext() {
+    setSelected(null)
+    setValidated(false)
+    setIndex(i => i + 1)
+  }
+
+  // Signale la question comme mal posée (exclue de la rotation pour tout le
+  // monde tant qu'elle n'est pas corrigée) et passe à la suivante sans
+  // enregistrer de tentative ni affecter le score.
+  async function handleReport() {
+    if (!current) return
+    await supabase.from('quiz_questions').update({ reported: true }).eq('id', current.id)
     setSelected(null)
     setValidated(false)
     setIndex(i => i + 1)
@@ -181,7 +199,7 @@ export default function QuizPlay({ userId, onFinish }: QuizPlayProps) {
                 : { backgroundColor: '#fff7ed', color: '#c2611d' }
             }
           >
-            {current.niveau} · {current.points} pt{current.points > 1 ? 's' : ''}
+            {current.niveau ?? (current.galop ? `Galop ${current.galop}` : current.categorie)} · {current.points} pt{current.points > 1 ? 's' : ''}
           </span>
           <p className="text-base font-bold text-gray-900">{current.question}</p>
         </div>
@@ -221,6 +239,15 @@ export default function QuizPlay({ userId, onFinish }: QuizPlayProps) {
             )
           })}
         </div>
+
+        <button
+          type="button"
+          onClick={handleReport}
+          className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold text-gray-400 hover:text-red-500 cursor-pointer transition-colors"
+        >
+          <Flag className="w-3.5 h-3.5" />
+          Signaler une question mal posée
+        </button>
 
         {validated && hasResource() && (
           <button
