@@ -19,11 +19,14 @@ import {
 const TVA_RATES = [0, 5.5, 10, 20] as const
 type TvaRate = (typeof TVA_RATES)[number]
 type VentilationMode = 'single' | 'multiple'
+type AmountMode = 'ht' | 'ttc'
 
 interface InvoiceLineDraft {
   localId: string
   label: string
-  ht: string
+  amountMode: AmountMode
+  ht: string // saisi si amountMode === 'ht'
+  ttc: string // saisi si amountMode === 'ttc'
   tvaRate: TvaRate
   horseShares: Record<string, number> // horseId | OTHER_KEY -> % (uniquement éléments inclus)
   autreLabel: string // nom libre quand OTHER_KEY est inclus (ex. "Scoubidou")
@@ -33,31 +36,196 @@ function makeBlankLine(horseShares: Record<string, number>): InvoiceLineDraft {
   return {
     localId: crypto.randomUUID(),
     label: '',
+    amountMode: 'ht',
     ht: '',
+    ttc: '',
     tvaRate: 20,
     horseShares,
     autreLabel: '',
   }
 }
 
-function lineTtc(line: InvoiceLineDraft): number {
+// TTC de la ligne — saisi directement, ou calculé depuis le HT + la TVA.
+function lineTtc(line: Pick<InvoiceLineDraft, 'amountMode' | 'ht' | 'ttc' | 'tvaRate'>): number {
+  if (line.amountMode === 'ttc') {
+    const ttc = parseFloat(line.ttc)
+    return isNaN(ttc) ? 0 : round2(ttc)
+  }
   const ht = parseFloat(line.ht)
   if (isNaN(ht)) return 0
   return round2(ht * (1 + line.tvaRate / 100))
 }
 
-function lineShareSum(line: InvoiceLineDraft): number {
-  return round2(Object.values(line.horseShares).reduce((s, v) => s + (v || 0), 0))
+// HT affiché — saisi directement, ou calculé depuis le TTC + la TVA (vérification uniquement).
+function lineHtDisplay(line: Pick<InvoiceLineDraft, 'amountMode' | 'ht' | 'ttc' | 'tvaRate'>): number | null {
+  if (line.amountMode === 'ht') {
+    const ht = parseFloat(line.ht)
+    return isNaN(ht) ? null : ht
+  }
+  const ttc = parseFloat(line.ttc)
+  if (isNaN(ttc)) return null
+  return round2(ttc / (1 + line.tvaRate / 100))
 }
 
-function isShareValid(line: InvoiceLineDraft): boolean {
-  return Object.keys(line.horseShares).length > 0 && Math.round(lineShareSum(line) * 100) === 10000
+function shareSum(shares: Record<string, number>): number {
+  return round2(Object.values(shares).reduce((s, v) => s + (v || 0), 0))
+}
+
+function isSharesValid(shares: Record<string, number>): boolean {
+  return Object.keys(shares).length > 0 && Math.round(shareSum(shares) * 100) === 10000
 }
 
 function isLineValid(line: InvoiceLineDraft): boolean {
-  const ht = parseFloat(line.ht)
+  const amount = line.amountMode === 'ttc' ? parseFloat(line.ttc) : parseFloat(line.ht)
   const otherNamed = !(OTHER_KEY in line.horseShares) || line.autreLabel.trim() !== ''
-  return line.label.trim() !== '' && !isNaN(ht) && ht > 0 && isShareValid(line) && otherNamed
+  return line.label.trim() !== '' && !isNaN(amount) && amount > 0 && isSharesValid(line.horseShares) && otherNamed
+}
+
+// ─── Ventilation par cheval — factorisé pour être réutilisé par la ligne de solde ──
+function LineVentilation({
+  horses,
+  ventilationMode,
+  singleHorseName,
+  horseShares,
+  autreLabel,
+  onToggleHorse,
+  onClearAll,
+  onShareChange,
+  onAutreLabelChange,
+}: {
+  horses: Horse[]
+  ventilationMode: VentilationMode
+  singleHorseName: string | null
+  horseShares: Record<string, number>
+  autreLabel: string
+  onToggleHorse: (horseId: string) => void
+  onClearAll: () => void
+  onShareChange: (horseId: string, value: number) => void
+  onAutreLabelChange: (value: string) => void
+}) {
+  const includedIds = Object.keys(horseShares)
+  const sum = shareSum(horseShares)
+  const valid = isSharesValid(horseShares)
+
+  if (ventilationMode === 'single') {
+    return (
+      <div className="flex items-center gap-1.5 text-[11px] font-bold" style={{ color: '#2f6b3f' }}>
+        <Check className="w-3.5 h-3.5" />
+        Ventilation : 100% {singleHorseName ?? '— choisis un cheval ci-dessus'}
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1.5">
+        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Ventilation</p>
+        {includedIds.length > 0 && (
+          <button
+            type="button"
+            onClick={onClearAll}
+            className="text-[10px] font-semibold text-gray-400 underline underline-offset-2 cursor-pointer hover:text-red-500 transition-colors"
+          >
+            Désélectionner tout
+          </button>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        {horses.map(horse => {
+          const included = includedIds.includes(horse.id)
+          const color = horse.color_hex ?? HORSE_COLORS[horse.name] ?? '#2f6b3f'
+          return (
+            <button
+              key={horse.id}
+              type="button"
+              onClick={() => onToggleHorse(horse.id)}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[11px] font-bold cursor-pointer transition-all active:scale-[0.97] border-2"
+              style={
+                included
+                  ? { backgroundColor: color, borderColor: color, color: 'white' }
+                  : { backgroundColor: 'white', borderColor: '#e5e7eb', color: '#4b5563' }
+              }
+            >
+              {included && <Check className="w-3 h-3" />}
+              {horse.name}
+            </button>
+          )
+        })}
+
+        {/* ── Autre (hors suivi chevaux, ex. facture erronée pour un autre animal) ── */}
+        <button
+          type="button"
+          onClick={() => onToggleHorse(OTHER_KEY)}
+          className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[11px] font-bold cursor-pointer transition-all active:scale-[0.97] border-2 border-dashed"
+          style={
+            includedIds.includes(OTHER_KEY)
+              ? { backgroundColor: '#6b7280', borderColor: '#6b7280', borderStyle: 'solid', color: 'white' }
+              : { backgroundColor: 'white', borderColor: '#d1d5db', color: '#6b7280' }
+          }
+        >
+          {includedIds.includes(OTHER_KEY) && <Check className="w-3 h-3" />}
+          Autre
+        </button>
+      </div>
+
+      {includedIds.length > 0 && (
+        <div className="space-y-1.5">
+          {includedIds.map(horseId => {
+            if (horseId === OTHER_KEY) {
+              return (
+                <div key={horseId} className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={autreLabel}
+                    onChange={e => onAutreLabelChange(e.target.value)}
+                    placeholder="Nom (ex. Scoubidou)"
+                    className="flex-1 min-w-0 text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 text-gray-700"
+                  />
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      step="0.1"
+                      value={horseShares[OTHER_KEY]}
+                      onChange={e => onShareChange(OTHER_KEY, parseFloat(e.target.value))}
+                      className="w-16 text-xs text-right border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 text-gray-700"
+                    />
+                    <span className="text-xs text-gray-400">%</span>
+                  </div>
+                </div>
+              )
+            }
+            const horse = horses.find(h => h.id === horseId)
+            if (!horse) return null
+            return (
+              <div key={horseId} className="flex items-center justify-between gap-2">
+                <span className="text-xs text-gray-600 flex-1 truncate">{horse.name}</span>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.1"
+                    value={horseShares[horseId]}
+                    onChange={e => onShareChange(horseId, parseFloat(e.target.value))}
+                    className="w-16 text-xs text-right border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 text-gray-700"
+                  />
+                  <span className="text-xs text-gray-400">%</span>
+                </div>
+              </div>
+            )
+          })}
+
+          <div
+            className="flex items-center gap-1.5 text-[11px] font-bold pt-1"
+            style={{ color: valid ? '#2f6b3f' : '#dc2626' }}
+          >
+            {valid ? <Check className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
+            Somme : {sum}% {valid ? '' : '— doit être exactement 100%'}
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ─── Page Saisie de facture ──────────────────────────────────────────────────
@@ -76,6 +244,14 @@ export default function SaisieFacture({ onBack }: SaisieFactureProps) {
   const [ventilationMode, setVentilationMode] = useState<VentilationMode>('multiple')
   const [singleHorseId, setSingleHorseId] = useState<string | null>(null)
 
+  // ── Montant total de la facture (référence papier) ────────────────────────
+  const [factureTotalTtc, setFactureTotalTtc] = useState('')
+
+  // ── Ligne de solde automatique (reste à ventiler) ──────────────────────────
+  const [remainderLabel, setRemainderLabel] = useState('')
+  const [remainderShares, setRemainderShares] = useState<Record<string, number>>({})
+  const [remainderAutreLabel, setRemainderAutreLabel] = useState('')
+
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
@@ -90,7 +266,9 @@ export default function SaisieFacture({ onBack }: SaisieFactureProps) {
 
   useEffect(() => {
     if (horses.length > 0 && lines.length === 0) {
-      setLines([makeBlankLine(equalSplit(horses.map(h => h.id)))])
+      const defaultShares = equalSplit(horses.map(h => h.id))
+      setLines([makeBlankLine(defaultShares)])
+      setRemainderShares(defaultShares)
     }
   }, [horses]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -104,15 +282,19 @@ export default function SaisieFacture({ onBack }: SaisieFactureProps) {
     setVentilationMode(mode)
     if (mode === 'multiple') {
       setSingleHorseId(null)
-      setLines(prev => prev.map(l => ({ ...l, horseShares: equalSplit(horses.map(h => h.id)) })))
+      const shares = equalSplit(horses.map(h => h.id))
+      setLines(prev => prev.map(l => ({ ...l, horseShares: shares })))
+      setRemainderShares(shares)
     } else {
       setLines(prev => prev.map(l => ({ ...l, horseShares: {} })))
+      setRemainderShares({})
     }
   }
 
   function selectSingleHorse(horseId: string) {
     setSingleHorseId(horseId)
     setLines(prev => prev.map(l => ({ ...l, horseShares: { [horseId]: 100 } })))
+    setRemainderShares({ [horseId]: 100 })
   }
 
   function addLine() {
@@ -154,10 +336,40 @@ export default function SaisieFacture({ onBack }: SaisieFactureProps) {
     )
   }
 
-  const totalTtc = round2(lines.reduce((sum, l) => sum + lineTtc(l), 0))
+  function toggleHorseForRemainder(horseId: string) {
+    const included = Object.keys(remainderShares)
+    const nextIncluded = included.includes(horseId)
+      ? included.filter(id => id !== horseId)
+      : [...included, horseId]
+    setRemainderShares(equalSplit(nextIncluded))
+  }
+
+  function updateRemainderShare(horseId: string, value: number) {
+    setRemainderShares(prev => ({ ...prev, [horseId]: isNaN(value) ? 0 : value }))
+  }
+
+  const manualLinesTtc = round2(lines.reduce((sum, l) => sum + lineTtc(l), 0))
+  const factureTotalNum = parseFloat(factureTotalTtc)
+  const hasFactureTotal = !isNaN(factureTotalNum) && factureTotalNum > 0
+  const remainderTtc = hasFactureTotal ? round2(factureTotalNum - manualLinesTtc) : 0
+  const showRemainderLine = hasFactureTotal && remainderTtc > 0.004
+  const overBudget = hasFactureTotal && remainderTtc < -0.004
+
+  const remainderOtherNamed = !(OTHER_KEY in remainderShares) || remainderAutreLabel.trim() !== ''
+  const remainderValid =
+    !showRemainderLine || (remainderLabel.trim() !== '' && isSharesValid(remainderShares) && remainderOtherNamed)
+
   const linesValid = lines.length > 0 && lines.every(isLineValid)
   const modeValid = ventilationMode === 'multiple' || singleHorseId !== null
-  const canSubmit = invoiceDate !== '' && intervenantType !== null && linesValid && modeValid && !saving
+  const canSubmit =
+    invoiceDate !== '' &&
+    intervenantType !== null &&
+    hasFactureTotal &&
+    !overBudget &&
+    linesValid &&
+    modeValid &&
+    remainderValid &&
+    !saving
 
   function resetForm() {
     setInvoiceDate(todayYmd())
@@ -165,7 +377,12 @@ export default function SaisieFacture({ onBack }: SaisieFactureProps) {
     setNote('')
     setVentilationMode('multiple')
     setSingleHorseId(null)
-    setLines([makeBlankLine(equalSplit(horses.map(h => h.id)))])
+    setFactureTotalTtc('')
+    setRemainderLabel('')
+    setRemainderAutreLabel('')
+    const defaultShares = equalSplit(horses.map(h => h.id))
+    setLines([makeBlankLine(defaultShares)])
+    setRemainderShares(defaultShares)
   }
 
   async function handleValidate() {
@@ -175,8 +392,24 @@ export default function SaisieFacture({ onBack }: SaisieFactureProps) {
     setSuccessMessage(null)
 
     try {
+      const allLines: InvoiceLineDraft[] = showRemainderLine
+        ? [
+            ...lines,
+            {
+              localId: 'remainder',
+              label: remainderLabel.trim(),
+              amountMode: 'ttc',
+              ht: '',
+              ttc: String(remainderTtc),
+              tvaRate: 20,
+              horseShares: remainderShares,
+              autreLabel: remainderAutreLabel,
+            },
+          ]
+        : lines
+
       const traceNotes: string[] = []
-      const expenseRowsDraft = lines.flatMap(line => {
+      const expenseRowsDraft = allLines.flatMap(line => {
         const perHorse = splitTtcByShares(lineTtc(line), line.horseShares)
         const otherAmount = perHorse[OTHER_KEY]
         if (otherAmount && otherAmount > 0) {
@@ -202,7 +435,7 @@ export default function SaisieFacture({ onBack }: SaisieFactureProps) {
         .insert({
           invoice_date: invoiceDate,
           intervenant_type: intervenantType,
-          total_ttc: totalTtc,
+          total_ttc: factureTotalNum,
           status: 'validated',
           photo_url: null,
           notes: combinedNotes,
@@ -229,6 +462,10 @@ export default function SaisieFacture({ onBack }: SaisieFactureProps) {
       setSaving(false)
     }
   }
+
+  const singleHorseName = ventilationMode === 'single' && singleHorseId
+    ? horses.find(h => h.id === singleHorseId)?.name ?? null
+    : null
 
   return (
     <div className="flex-1 flex flex-col">
@@ -345,6 +582,22 @@ export default function SaisieFacture({ onBack }: SaisieFactureProps) {
               </div>
             )}
           </div>
+
+          {/* ── Montant total de la facture (référence papier) ── */}
+          <div>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
+              Montant total de la facture TTC
+            </p>
+            <input
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              value={factureTotalTtc}
+              onChange={e => setFactureTotalTtc(e.target.value)}
+              placeholder="0.00"
+              className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 text-gray-700"
+            />
+          </div>
         </section>
 
         {/* ── Lignes ── */}
@@ -364,12 +617,7 @@ export default function SaisieFacture({ onBack }: SaisieFactureProps) {
 
           {lines.map((line, idx) => {
             const ttc = lineTtc(line)
-            const shareSum = lineShareSum(line)
-            const shareValid = isShareValid(line)
-            const includedIds = Object.keys(line.horseShares)
-            const singleHorse = ventilationMode === 'single' && singleHorseId
-              ? horses.find(h => h.id === singleHorseId)
-              : null
+            const htDisplay = lineHtDisplay(line)
 
             return (
               <div key={line.localId} className="bg-white rounded-xl shadow-xs p-4 space-y-3">
@@ -394,18 +642,47 @@ export default function SaisieFacture({ onBack }: SaisieFactureProps) {
                   className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 text-gray-700"
                 />
 
+                <div className="flex items-center justify-between">
+                  <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Saisie</p>
+                  <div className="flex gap-1">
+                    {(['ht', 'ttc'] as const).map(mode => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => updateLine(line.localId, { amountMode: mode })}
+                        className="text-[10px] font-bold px-2.5 py-1 rounded-full border cursor-pointer transition-all"
+                        style={
+                          line.amountMode === mode
+                            ? { borderColor: '#bfe0c9', backgroundColor: '#f0fbf4', color: '#2f6b3f' }
+                            : { borderColor: '#e5e7eb', backgroundColor: 'white', color: '#9ca3af' }
+                        }
+                      >
+                        {mode.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1">Montant HT</p>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      step="0.01"
-                      value={line.ht}
-                      onChange={e => updateLine(line.localId, { ht: e.target.value })}
-                      placeholder="0.00"
-                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 text-gray-700"
-                    />
+                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                      {line.amountMode === 'ht' ? 'Montant HT' : 'HT (calculé)'}
+                    </p>
+                    {line.amountMode === 'ht' ? (
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        step="0.01"
+                        value={line.ht}
+                        onChange={e => updateLine(line.localId, { ht: e.target.value })}
+                        placeholder="0.00"
+                        className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 text-gray-700"
+                      />
+                    ) : (
+                      <div className="w-full text-sm border border-gray-100 rounded-lg px-3 py-2 bg-gray-50 text-gray-400">
+                        {htDisplay !== null ? formatEuro(htDisplay) : '—'}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1">TVA</p>
@@ -430,141 +707,90 @@ export default function SaisieFacture({ onBack }: SaisieFactureProps) {
                 </div>
 
                 <div className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">TTC calculé</span>
-                  <span className="text-sm font-black text-gray-800">{formatEuro(ttc)}</span>
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                    {line.amountMode === 'ttc' ? 'Montant TTC' : 'TTC calculé'}
+                  </span>
+                  {line.amountMode === 'ttc' ? (
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      step="0.01"
+                      value={line.ttc}
+                      onChange={e => updateLine(line.localId, { ttc: e.target.value })}
+                      placeholder="0.00"
+                      className="w-24 text-sm text-right border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 text-gray-700"
+                    />
+                  ) : (
+                    <span className="text-sm font-black text-gray-800">{formatEuro(ttc)}</span>
+                  )}
                 </div>
 
-                {/* ── Ventilation par cheval ── */}
-                {ventilationMode === 'single' ? (
-                  <div className="flex items-center gap-1.5 text-[11px] font-bold" style={{ color: '#2f6b3f' }}>
-                    <Check className="w-3.5 h-3.5" />
-                    Ventilation : 100% {singleHorse ? singleHorse.name : '— choisis un cheval ci-dessus'}
-                  </div>
-                ) : (
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Ventilation</p>
-                      {includedIds.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => clearLineHorses(line.localId)}
-                          className="text-[10px] font-semibold text-gray-400 underline underline-offset-2 cursor-pointer hover:text-red-500 transition-colors"
-                        >
-                          Désélectionner tout
-                        </button>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap gap-1.5 mb-2">
-                      {horses.map(horse => {
-                        const included = includedIds.includes(horse.id)
-                        const color = horse.color_hex ?? HORSE_COLORS[horse.name] ?? '#2f6b3f'
-                        return (
-                          <button
-                            key={horse.id}
-                            type="button"
-                            onClick={() => toggleHorseForLine(line.localId, horse.id)}
-                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[11px] font-bold cursor-pointer transition-all active:scale-[0.97] border-2"
-                            style={
-                              included
-                                ? { backgroundColor: color, borderColor: color, color: 'white' }
-                                : { backgroundColor: 'white', borderColor: '#e5e7eb', color: '#4b5563' }
-                            }
-                          >
-                            {included && <Check className="w-3 h-3" />}
-                            {horse.name}
-                          </button>
-                        )
-                      })}
-
-                      {/* ── Autre (hors suivi chevaux, ex. facture erronée pour un autre animal) ── */}
-                      <button
-                        type="button"
-                        onClick={() => toggleHorseForLine(line.localId, OTHER_KEY)}
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[11px] font-bold cursor-pointer transition-all active:scale-[0.97] border-2 border-dashed"
-                        style={
-                          includedIds.includes(OTHER_KEY)
-                            ? { backgroundColor: '#6b7280', borderColor: '#6b7280', borderStyle: 'solid', color: 'white' }
-                            : { backgroundColor: 'white', borderColor: '#d1d5db', color: '#6b7280' }
-                        }
-                      >
-                        {includedIds.includes(OTHER_KEY) && <Check className="w-3 h-3" />}
-                        Autre
-                      </button>
-                    </div>
-
-                    {includedIds.length > 0 && (
-                      <div className="space-y-1.5">
-                        {includedIds.map(horseId => {
-                          if (horseId === OTHER_KEY) {
-                            return (
-                              <div key={horseId} className="flex items-center gap-2">
-                                <input
-                                  type="text"
-                                  value={line.autreLabel}
-                                  onChange={e => updateLine(line.localId, { autreLabel: e.target.value })}
-                                  placeholder="Nom (ex. Scoubidou)"
-                                  className="flex-1 min-w-0 text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 text-gray-700"
-                                />
-                                <div className="flex items-center gap-1">
-                                  <input
-                                    type="number"
-                                    inputMode="decimal"
-                                    step="0.1"
-                                    value={line.horseShares[OTHER_KEY]}
-                                    onChange={e =>
-                                      updateHorseShare(line.localId, OTHER_KEY, parseFloat(e.target.value))
-                                    }
-                                    className="w-16 text-xs text-right border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 text-gray-700"
-                                  />
-                                  <span className="text-xs text-gray-400">%</span>
-                                </div>
-                              </div>
-                            )
-                          }
-                          const horse = horses.find(h => h.id === horseId)
-                          if (!horse) return null
-                          return (
-                            <div key={horseId} className="flex items-center justify-between gap-2">
-                              <span className="text-xs text-gray-600 flex-1 truncate">{horse.name}</span>
-                              <div className="flex items-center gap-1">
-                                <input
-                                  type="number"
-                                  inputMode="decimal"
-                                  step="0.1"
-                                  value={line.horseShares[horseId]}
-                                  onChange={e =>
-                                    updateHorseShare(line.localId, horseId, parseFloat(e.target.value))
-                                  }
-                                  className="w-16 text-xs text-right border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 text-gray-700"
-                                />
-                                <span className="text-xs text-gray-400">%</span>
-                              </div>
-                            </div>
-                          )
-                        })}
-
-                        <div
-                          className="flex items-center gap-1.5 text-[11px] font-bold pt-1"
-                          style={{ color: shareValid ? '#2f6b3f' : '#dc2626' }}
-                        >
-                          {shareValid ? <Check className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
-                          Somme : {shareSum}% {shareValid ? '' : '— doit être exactement 100%'}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
+                <LineVentilation
+                  horses={horses}
+                  ventilationMode={ventilationMode}
+                  singleHorseName={singleHorseName}
+                  horseShares={line.horseShares}
+                  autreLabel={line.autreLabel}
+                  onToggleHorse={horseId => toggleHorseForLine(line.localId, horseId)}
+                  onClearAll={() => clearLineHorses(line.localId)}
+                  onShareChange={(horseId, value) => updateHorseShare(line.localId, horseId, value)}
+                  onAutreLabelChange={value => updateLine(line.localId, { autreLabel: value })}
+                />
               </div>
             )
           })}
+
+          {/* ── Ligne de solde automatique — tant que le montant de la facture n'est pas atteint ── */}
+          {showRemainderLine && (
+            <div className="bg-white rounded-xl shadow-xs p-4 space-y-3 border-2" style={{ borderColor: '#bfe0c9' }}>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold" style={{ color: '#2f6b3f' }}>Reste à ventiler</span>
+              </div>
+
+              <input
+                type="text"
+                value={remainderLabel}
+                onChange={e => setRemainderLabel(e.target.value)}
+                placeholder="Libellé (ex. Reste de la facture)"
+                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 text-gray-700"
+              />
+
+              <div className="flex items-center justify-between rounded-lg px-3 py-2" style={{ backgroundColor: '#f0fbf4' }}>
+                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#2f6b3f' }}>
+                  Montant TTC restant
+                </span>
+                <span className="text-sm font-black" style={{ color: '#2f6b3f' }}>{formatEuro(remainderTtc)}</span>
+              </div>
+
+              <LineVentilation
+                horses={horses}
+                ventilationMode={ventilationMode}
+                singleHorseName={singleHorseName}
+                horseShares={remainderShares}
+                autreLabel={remainderAutreLabel}
+                onToggleHorse={toggleHorseForRemainder}
+                onClearAll={() => setRemainderShares({})}
+                onShareChange={updateRemainderShare}
+                onAutreLabelChange={setRemainderAutreLabel}
+              />
+            </div>
+          )}
         </section>
 
         {/* ── Total de vérification ── */}
         <section className="bg-white rounded-2xl shadow-xs p-5 text-center">
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
-            Total à comparer avec la facture papier
+            Montant total de la facture
           </p>
-          <p className="text-3xl font-black" style={{ color: '#2f6b3f' }}>{formatEuro(totalTtc)}</p>
+          <p className="text-3xl font-black" style={{ color: overBudget ? '#dc2626' : '#2f6b3f' }}>
+            {hasFactureTotal ? formatEuro(factureTotalNum) : '—'}
+          </p>
+          {hasFactureTotal && (
+            <p className="text-xs font-semibold mt-1" style={{ color: overBudget ? '#dc2626' : '#9ca3af' }}>
+              Ventilé : {formatEuro(manualLinesTtc + (showRemainderLine ? remainderTtc : 0))}
+              {overBudget && ` — dépasse le montant de la facture de ${formatEuro(-remainderTtc)}`}
+            </p>
+          )}
         </section>
 
         {error && (

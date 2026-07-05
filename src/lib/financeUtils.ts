@@ -72,39 +72,23 @@ export function sortByCanonicalOrder(horses: Horse[]): Horse[] {
   })
 }
 
-// Répartition égale garantissant une somme exacte de 100 (le dernier élément
-// récupère le reliquat d'arrondi).
+// Répartition égale entre les éléments — chaque part est simplement arrondie
+// à 2 décimales, sans allocation du reliquat d'arrondi à un élément en particulier.
 export function equalSplit(ids: string[]): Record<string, number> {
   const n = ids.length
   if (n === 0) return {}
-  const base = Math.floor((100 / n) * 100) / 100
+  const share = round2(100 / n)
   const shares: Record<string, number> = {}
-  let assigned = 0
-  ids.forEach((id, i) => {
-    if (i === ids.length - 1) {
-      shares[id] = round2(100 - assigned)
-    } else {
-      shares[id] = base
-      assigned += base
-    }
-  })
+  ids.forEach(id => { shares[id] = share })
   return shares
 }
 
-// Ventile un TTC par part ; le dernier élément récupère le reliquat d'arrondi
-// pour que la somme retombe exactement sur le TTC ventilé.
+// Ventile un TTC par part — chaque montant est calculé et arrondi indépendamment,
+// sans allocation du reliquat d'arrondi à un élément en particulier.
 export function splitTtcByShares(ttc: number, shares: Record<string, number>): Record<string, number> {
-  const ids = Object.keys(shares)
   const result: Record<string, number> = {}
-  let assigned = 0
-  ids.forEach((id, i) => {
-    if (i === ids.length - 1) {
-      result[id] = round2(ttc - assigned)
-    } else {
-      const amount = round2((ttc * shares[id]) / 100)
-      result[id] = amount
-      assigned += amount
-    }
-  })
+  for (const id of Object.keys(shares)) {
+    result[id] = round2((ttc * (shares[id] || 0)) / 100)
+  }
   return result
 }
