@@ -14,6 +14,9 @@ export default function Finances() {
   const [loadingTotal, setLoadingTotal] = useState(true)
 
   useEffect(() => {
+    // Ré-exécuté à chaque retour au menu (y compris après Saisie de facture),
+    // pour ne jamais afficher un total resté figé depuis le montage initial.
+    if (view !== 'menu') return
     async function fetchTotal() {
       const { first, last } = yearBoundsYmd()
       const { data } = await supabase
@@ -26,7 +29,7 @@ export default function Finances() {
       setLoadingTotal(false)
     }
     fetchTotal()
-  }, [])
+  }, [view])
 
   if (view === 'saisie') return <SaisieFacture onBack={() => setView('menu')} />
   if (view === 'suivi') return <SuiviCouts onBack={() => setView('menu')} />
