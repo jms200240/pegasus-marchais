@@ -83,21 +83,35 @@ export function equalSplit(ids: string[]): Record<string, number> {
   return shares
 }
 
+// Tolérance d'arrondi absorbée automatiquement (bruit d'arrondi pur, pas un
+// problème de ventilation réel). Avec 7 chevaux en répartition égale
+// (14.29% × 7 = 100.03%), l'écart monétaire dépasse 5 cts dès qu'une ligne
+// dépasse ~167€ — 10 cts couvre ce cas courant.
+export const SHARE_ROUNDING_TOLERANCE = 0.10
+
+// Écart entre le TTC ciblé et la somme des montants par part une fois chaque
+// part arrondie indépendamment (avant toute correction de reliquat).
+export function shareRoundingDiff(ttc: number, shares: Record<string, number>): number {
+  const sum = round2(
+    Object.keys(shares).reduce((s, id) => s + round2((ttc * (shares[id] || 0)) / 100), 0)
+  )
+  return round2(ttc - sum)
+}
+
 // Ventile un TTC par part — chaque montant est calculé et arrondi indépendamment.
-// Si l'écart résultant entre la somme des montants et le TTC ciblé reste
-// inférieur à 5 centimes (bruit d'arrondi), il est absorbé par le dernier
+// Si l'écart résultant entre la somme des montants et le TTC ciblé reste sous
+// SHARE_ROUNDING_TOLERANCE (bruit d'arrondi), il est absorbé par le dernier
 // cheval de la liste des chevaux sélectionnés pour cette ligne — jamais par
-// la part "Autre" (OTHER_KEY, hors suivi chevaux). Au-delà de 5 centimes,
-// l'écart est laissé tel quel (signe d'un problème de ventilation réel).
+// la part "Autre" (OTHER_KEY, hors suivi chevaux). Au-delà, l'écart est
+// laissé tel quel (signe d'un problème de ventilation réel).
 export function splitTtcByShares(ttc: number, shares: Record<string, number>): Record<string, number> {
   const result: Record<string, number> = {}
   for (const id of Object.keys(shares)) {
     result[id] = round2((ttc * (shares[id] || 0)) / 100)
   }
 
-  const sum = round2(Object.values(result).reduce((s, v) => s + v, 0))
-  const diff = round2(ttc - sum)
-  if (Math.abs(diff) < 0.05) {
+  const diff = shareRoundingDiff(ttc, shares)
+  if (Math.abs(diff) < SHARE_ROUNDING_TOLERANCE) {
     const horseIds = Object.keys(shares).filter(id => id !== OTHER_KEY)
     const lastHorseId = horseIds[horseIds.length - 1]
     if (lastHorseId) {

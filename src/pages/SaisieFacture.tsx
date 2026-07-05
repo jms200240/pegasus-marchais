@@ -14,6 +14,8 @@ import {
   sortByCanonicalOrder,
   equalSplit,
   splitTtcByShares,
+  shareRoundingDiff,
+  SHARE_ROUNDING_TOLERANCE,
 } from '../lib/financeUtils'
 
 const TVA_RATES = [0, 5.5, 10, 20] as const
@@ -82,8 +84,12 @@ function shareSum(shares: Record<string, number>): number {
   return round2(Object.values(shares).reduce((s, v) => s + (v || 0), 0))
 }
 
-function isSharesValid(shares: Record<string, number>): boolean {
-  return Object.keys(shares).length > 0 && Math.round(shareSum(shares) * 100) === 10000
+// Ventilation exactement à 100% — ou, si le TTC de la ligne est connu, dont le
+// bruit d'arrondi résultant reste absorbable (cf. splitTtcByShares).
+function isSharesValid(shares: Record<string, number>, ttc = 0): boolean {
+  if (Object.keys(shares).length === 0) return false
+  if (Math.round(shareSum(shares) * 100) === 10000) return true
+  return ttc > 0 && Math.abs(shareRoundingDiff(ttc, shares)) < SHARE_ROUNDING_TOLERANCE
 }
 
 function isLineValid(line: InvoiceLineDraft): boolean {
@@ -94,7 +100,7 @@ function isLineValid(line: InvoiceLineDraft): boolean {
     line.label.trim() !== '' &&
     !isNaN(amount) &&
     amount > 0 &&
-    isSharesValid(line.horseShares) &&
+    isSharesValid(line.horseShares, lineTtc(line)) &&
     otherNamed
   )
 }
@@ -106,6 +112,7 @@ function LineVentilation({
   singleHorseName,
   horseShares,
   autreLabel,
+  ttc,
   onToggleHorse,
   onClearAll,
   onShareChange,
@@ -116,6 +123,7 @@ function LineVentilation({
   singleHorseName: string | null
   horseShares: Record<string, number>
   autreLabel: string
+  ttc?: number
   onToggleHorse: (horseId: string) => void
   onClearAll: () => void
   onShareChange: (horseId: string, value: number) => void
@@ -123,7 +131,8 @@ function LineVentilation({
 }) {
   const includedIds = Object.keys(horseShares)
   const sum = shareSum(horseShares)
-  const valid = isSharesValid(horseShares)
+  const isExact = Math.round(sum * 100) === 10000
+  const valid = isSharesValid(horseShares, ttc ?? 0)
 
   if (ventilationMode === 'single') {
     return (
@@ -238,7 +247,10 @@ function LineVentilation({
             style={{ color: valid ? '#2f6b3f' : '#dc2626' }}
           >
             {valid ? <Check className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
-            Somme : {sum}% {valid ? '' : '— doit être exactement 100%'}
+            Somme : {sum}%{' '}
+            {valid
+              ? !isExact && '— écart d\'arrondi absorbé automatiquement'
+              : '— doit être exactement 100%'}
           </div>
         </div>
       )}
@@ -797,6 +809,7 @@ export default function SaisieFacture({ onBack }: SaisieFactureProps) {
                     singleHorseName={singleHorseName}
                     horseShares={line.horseShares}
                     autreLabel={line.autreLabel}
+                    ttc={ttc}
                     onToggleHorse={horseId => toggleHorseForLine(line.localId, horseId)}
                     onClearAll={() => clearLineHorses(line.localId)}
                     onShareChange={(horseId, value) => updateHorseShare(line.localId, horseId, value)}
