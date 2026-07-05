@@ -208,6 +208,39 @@ export interface Expense {
   created_at: string
 }
 
+export type QuizAnswer = 'A' | 'B' | 'C' | 'D'
+export type QuizNiveau = 'Facile' | 'Difficile'
+
+export interface QuizQuestion {
+  id: string
+  external_id: number | null
+  question: string
+  reponse_a: string
+  reponse_b: string
+  reponse_c: string
+  reponse_d: string
+  bonne_reponse: QuizAnswer
+  niveau: QuizNiveau
+  points: number
+  categorie: string             // 'Maladies' | 'Parasites' | 'Vaccins' | 'Généalogie' | autres à venir
+  thematique: string | null
+  // Polymorphe selon categorie : uuid pathologies.id (Maladies/Parasites),
+  // nom de vaccin en texte libre (Vaccins), ou slug nom de cheval (Généalogie).
+  source_id: string | null
+  is_active: boolean
+  created_at: string
+}
+
+export interface QuizAttempt {
+  id: string
+  user_id: string
+  question_id: string
+  chosen_reponse: QuizAnswer
+  is_correct: boolean
+  points_earned: number
+  answered_at: string
+}
+
 // Ordre canonique des chevaux actifs (codé en dur, côté frontend)
 export const CANONICAL_ORDER = [
   'Échalote',

@@ -13,6 +13,7 @@ import Chevaux from './pages/Chevaux'
 import FicheCheval from './pages/FicheCheval'
 import Finances from './pages/Finances'
 import GaleriePhotos from './pages/GaleriePhotos'
+import Quiz from './pages/Quiz'
 
 function App() {
   const [session, setSession] = useState<Session | null>(null)
@@ -69,6 +70,8 @@ function App() {
         return <Chevaux onSelectHorse={(id) => setSelectedHorseId(id)} />
       case 'galerie':
         return <GaleriePhotos readOnly={readOnly} />
+      case 'quiz':
+        return <Quiz userId={session?.user.id ?? ''} />
       case 'finances':
         return role === 'famille' ? <Finances /> : <Accueil readOnly={readOnly} />
       default:
