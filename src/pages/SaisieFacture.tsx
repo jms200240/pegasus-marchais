@@ -30,10 +30,10 @@ interface InvoiceLineDraft {
   tvaRate: TvaRate
   horseShares: Record<string, number> // horseId | OTHER_KEY -> % (uniquement éléments inclus)
   autreLabel: string // nom libre quand OTHER_KEY est inclus (ex. "Scoubidou")
-  // Ligne de solde auto-gérée (montant = reste à ventiler, recalculé en temps réel)
-  // — perd ce statut dès que l'utilisateur modifie la ligne, ce qui fait alors
-  // apparaître une nouvelle ligne de solde derrière elle si un écart subsiste.
-  isAutoTail?: boolean
+  validated: boolean // verrouillée via "Valider la ligne" — seules les lignes validées comptent dans le solde et sont soumises
+  // Tant que la ligne n'est pas validée et n'a pas été touchée manuellement,
+  // son montant TTC suit automatiquement le solde restant à ventiler.
+  autoSynced: boolean
 }
 
 function makeBlankLine(horseShares: Record<string, number>, overrides: Partial<InvoiceLineDraft> = {}): InvoiceLineDraft {
@@ -46,6 +46,8 @@ function makeBlankLine(horseShares: Record<string, number>, overrides: Partial<I
     tvaRate: 20,
     horseShares,
     autreLabel: '',
+    validated: false,
+    autoSynced: false,
     ...overrides,
   }
 }
@@ -86,7 +88,7 @@ function isLineValid(line: InvoiceLineDraft): boolean {
   return line.label.trim() !== '' && !isNaN(amount) && amount > 0 && isSharesValid(line.horseShares) && otherNamed
 }
 
-// ─── Ventilation par cheval — factorisé pour être réutilisé par la ligne de solde ──
+// ─── Ventilation par cheval — factorisé pour être réutilisé par chaque ligne ──
 function LineVentilation({
   horses,
   ventilationMode,
@@ -249,8 +251,9 @@ export default function SaisieFacture({ onBack }: SaisieFactureProps) {
   const [ventilationMode, setVentilationMode] = useState<VentilationMode>('multiple')
   const [singleHorseId, setSingleHorseId] = useState<string | null>(null)
 
-  // ── Montant total de la facture (référence papier) ────────────────────────
+  // ── Montant total de la facture (référence papier) — gate la section Lignes ──
   const [factureTotalTtc, setFactureTotalTtc] = useState('')
+  const [factureTotalValidated, setFactureTotalValidated] = useState(false)
   const factureTotalNum = parseFloat(factureTotalTtc)
   const hasFactureTotal = !isNaN(factureTotalNum) && factureTotalNum > 0
 
@@ -266,43 +269,60 @@ export default function SaisieFacture({ onBack }: SaisieFactureProps) {
 
   useEffect(() => { fetchHorses() }, [])
 
-  useEffect(() => {
-    if (horses.length > 0 && lines.length === 0) {
-      const defaultShares = equalSplit(horses.map(h => h.id))
-      setLines([makeBlankLine(defaultShares, { amountMode: 'ttc', isAutoTail: true })])
-    }
-  }, [horses]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Ligne de solde automatique : tant que le montant total de la facture n'est
-  // pas atteint par les lignes "fixées" (non auto-gérées), maintient une unique
-  // ligne de solde à la fin, dont le montant TTC suit le reste à ventiler.
-  useEffect(() => {
-    if (!hasFactureTotal) return
-    const fixedSum = round2(lines.filter(l => !l.isAutoTail).reduce((sum, l) => sum + lineTtc(l), 0))
-    const remainder = round2(factureTotalNum - fixedSum)
-    const tail = lines.find(l => l.isAutoTail)
-    if (remainder > 0.004) {
-      const remainderStr = String(remainder)
-      if (tail) {
-        if (tail.ttc !== remainderStr) {
-          setLines(prev => prev.map(l => (l.isAutoTail ? { ...l, ttc: remainderStr } : l)))
-        }
-      } else {
-        setLines(prev => [
-          ...prev,
-          makeBlankLine(currentDefaultShares(), { amountMode: 'ttc', ttc: remainderStr, isAutoTail: true }),
-        ])
-      }
-    } else if (tail) {
-      setLines(prev => prev.filter(l => !l.isAutoTail))
-    }
-  }, [lines, factureTotalNum, hasFactureTotal]) // eslint-disable-line react-hooks/exhaustive-deps
-
   function currentDefaultShares(): Record<string, number> {
     if (ventilationMode === 'single' && singleHorseId) return { [singleHorseId]: 100 }
     if (ventilationMode === 'single') return {}
     return equalSplit(horses.map(h => h.id))
   }
+
+  // ── "Valider le montant" : ouvre la section Lignes, crée la ligne 1 (TTC
+  // préremplie avec le montant total) si elle n'existe pas encore ──
+  function handleValidateTotal() {
+    if (!hasFactureTotal) return
+    setFactureTotalValidated(true)
+    if (lines.length === 0) {
+      setLines([
+        makeBlankLine(currentDefaultShares(), {
+          amountMode: 'ttc',
+          ttc: String(factureTotalNum),
+          autoSynced: true,
+        }),
+      ])
+    }
+  }
+
+  // Toute nouvelle édition du montant total invalide la validation précédente
+  // — il faut re-cliquer "Valider le montant" pour rouvrir/recalculer les lignes.
+  function handleTotalChange(value: string) {
+    setFactureTotalTtc(value)
+    if (factureTotalValidated) setFactureTotalValidated(false)
+  }
+
+  // ── Ligne de solde automatique : tant que le montant total de la facture n'est
+  // pas atteint par les lignes déjà validées, maintient une unique ligne en
+  // attente à la fin, dont le montant TTC suit le reste à ventiler (tant que
+  // l'utilisateur ne l'a pas modifiée à la main).
+  useEffect(() => {
+    if (!factureTotalValidated || !hasFactureTotal) return
+    const fixedSum = round2(lines.filter(l => l.validated).reduce((sum, l) => sum + lineTtc(l), 0))
+    const remainder = round2(factureTotalNum - fixedSum)
+    const pending = lines.find(l => !l.validated)
+    if (remainder > 0.004) {
+      const remainderStr = String(remainder)
+      if (pending) {
+        if (pending.autoSynced && pending.ttc !== remainderStr) {
+          setLines(prev => prev.map(l => (l.localId === pending.localId ? { ...l, ttc: remainderStr } : l)))
+        }
+      } else {
+        setLines(prev => [
+          ...prev,
+          makeBlankLine(currentDefaultShares(), { amountMode: 'ttc', ttc: remainderStr, autoSynced: true }),
+        ])
+      }
+    } else if (pending && pending.autoSynced) {
+      setLines(prev => prev.filter(l => l.localId !== pending.localId))
+    }
+  }, [lines, factureTotalNum, hasFactureTotal, factureTotalValidated]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function selectMode(mode: VentilationMode) {
     setVentilationMode(mode)
@@ -328,15 +348,20 @@ export default function SaisieFacture({ onBack }: SaisieFactureProps) {
     setLines(prev => (prev.length > 1 ? prev.filter(l => l.localId !== localId) : prev))
   }
 
-  // Modifier le montant (HT/TTC/TVA/mode) d'une ligne de solde auto lui retire
-  // ce statut — elle devient fixe, et une nouvelle ligne de solde apparaîtra
-  // derrière elle si un écart subsiste (cf. effet ci-dessus). Le libellé et la
-  // ventilation restent librement modifiables sans casser le suivi automatique.
+  // Modifier le montant (HT/TTC/TVA/mode) d'une ligne en attente lui retire le
+  // suivi automatique — elle garde sa valeur telle que saisie jusqu'à validation.
+  // Le libellé et la ventilation restent librement modifiables sans effet de bord.
   function updateLine(localId: string, patch: Partial<InvoiceLineDraft>) {
     const touchesAmount = 'ht' in patch || 'ttc' in patch || 'amountMode' in patch || 'tvaRate' in patch
     setLines(prev =>
-      prev.map(l => (l.localId === localId ? { ...l, ...patch, ...(touchesAmount ? { isAutoTail: false } : {}) } : l))
+      prev.map(l => (l.localId === localId ? { ...l, ...patch, ...(touchesAmount ? { autoSynced: false } : {}) } : l))
     )
+  }
+
+  // "Valider la ligne" — verrouille la ligne (si valide) ; l'effet ci-dessus
+  // fera alors apparaître une nouvelle ligne en attente si un solde subsiste.
+  function validateLine(localId: string) {
+    setLines(prev => prev.map(l => (l.localId === localId ? { ...l, validated: true } : l)))
   }
 
   function toggleHorseForLine(localId: string, horseId: string) {
@@ -366,17 +391,20 @@ export default function SaisieFacture({ onBack }: SaisieFactureProps) {
     )
   }
 
-  const allLinesTtc = round2(lines.reduce((sum, l) => sum + lineTtc(l), 0))
-  const overBudget = hasFactureTotal && round2(allLinesTtc - factureTotalNum) > 0.004
+  const validatedLines = lines.filter(l => l.validated)
+  const fixedSum = round2(validatedLines.reduce((sum, l) => sum + lineTtc(l), 0))
+  const overBudget = hasFactureTotal && round2(fixedSum - factureTotalNum) > 0.004
+  const fullyAllocated = hasFactureTotal && !overBudget && round2(factureTotalNum - fixedSum) <= 0.004
+  const noPendingLine = lines.every(l => l.validated)
 
-  const linesValid = lines.length > 0 && lines.every(isLineValid)
   const modeValid = ventilationMode === 'multiple' || singleHorseId !== null
   const canSubmit =
     invoiceDate !== '' &&
     intervenantType !== null &&
-    hasFactureTotal &&
-    !overBudget &&
-    linesValid &&
+    factureTotalValidated &&
+    fullyAllocated &&
+    noPendingLine &&
+    validatedLines.length > 0 &&
     modeValid &&
     !saving
 
@@ -387,8 +415,8 @@ export default function SaisieFacture({ onBack }: SaisieFactureProps) {
     setVentilationMode('multiple')
     setSingleHorseId(null)
     setFactureTotalTtc('')
-    const defaultShares = equalSplit(horses.map(h => h.id))
-    setLines([makeBlankLine(defaultShares, { amountMode: 'ttc', isAutoTail: true })])
+    setFactureTotalValidated(false)
+    setLines([])
   }
 
   async function handleValidate() {
@@ -399,7 +427,7 @@ export default function SaisieFacture({ onBack }: SaisieFactureProps) {
 
     try {
       const traceNotes: string[] = []
-      const expenseRowsDraft = lines.flatMap(line => {
+      const expenseRowsDraft = validatedLines.flatMap(line => {
         const perHorse = splitTtcByShares(lineTtc(line), line.horseShares)
         const otherAmount = perHorse[OTHER_KEY]
         if (otherAmount && otherAmount > 0) {
@@ -578,169 +606,217 @@ export default function SaisieFacture({ onBack }: SaisieFactureProps) {
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
               Montant total de la facture TTC
             </p>
-            <input
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              value={factureTotalTtc}
-              onChange={e => setFactureTotalTtc(e.target.value)}
-              placeholder="0.00"
-              className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 text-gray-700"
-            />
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                value={factureTotalTtc}
+                onChange={e => handleTotalChange(e.target.value)}
+                placeholder="0.00"
+                className="w-28 flex-shrink-0 text-sm border border-gray-200 rounded-xl px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 text-gray-700"
+              />
+              <button
+                type="button"
+                onClick={handleValidateTotal}
+                disabled={!hasFactureTotal || factureTotalValidated}
+                className="flex-1 flex items-center justify-center gap-1.5 text-sm font-bold py-2.5 rounded-xl cursor-pointer transition-all disabled:cursor-not-allowed"
+                style={
+                  factureTotalValidated
+                    ? { backgroundColor: '#f0fbf4', color: '#2f6b3f', border: '2px solid #bfe0c9' }
+                    : hasFactureTotal
+                    ? { backgroundColor: '#2f6b3f', color: 'white' }
+                    : { backgroundColor: '#e5e7eb', color: '#9ca3af' }
+                }
+              >
+                {factureTotalValidated ? <Check className="w-4 h-4" /> : null}
+                {factureTotalValidated ? 'Montant validé' : 'Valider le montant'}
+              </button>
+            </div>
           </div>
         </section>
 
-        {/* ── Lignes ── */}
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Lignes</p>
-            <button
-              type="button"
-              onClick={addLine}
-              className="flex items-center gap-1 text-xs font-bold underline underline-offset-2 cursor-pointer"
-              style={{ color: '#2f6b3f' }}
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Ajouter une ligne
-            </button>
-          </div>
+        {/* ── Lignes — n'apparaît qu'après validation du montant total ── */}
+        {factureTotalValidated && (
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Lignes</p>
+              {noPendingLine && (
+                <button
+                  type="button"
+                  onClick={addLine}
+                  className="flex items-center gap-1 text-xs font-bold underline underline-offset-2 cursor-pointer"
+                  style={{ color: '#2f6b3f' }}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Ajouter une ligne
+                </button>
+              )}
+            </div>
 
-          {lines.map((line, idx) => {
-            const ttc = lineTtc(line)
-            const htDisplay = lineHtDisplay(line)
+            {lines.map((line, idx) => {
+              const ttc = lineTtc(line)
+              const htDisplay = lineHtDisplay(line)
+              const lineValid = isLineValid(line)
 
-            return (
-              <div
-                key={line.localId}
-                className="bg-white rounded-xl shadow-xs p-4 space-y-3"
-                style={line.isAutoTail ? { border: '2px solid #bfe0c9' } : undefined}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-gray-400">
-                    Ligne {idx + 1}
-                    {line.isAutoTail && (
-                      <span className="ml-1.5 font-normal normal-case" style={{ color: '#2f6b3f' }}>
-                        · reste à ventiler
-                      </span>
-                    )}
-                  </span>
-                  {lines.length > 1 && !line.isAutoTail && (
-                    <button
-                      type="button"
-                      onClick={() => removeLine(line.localId)}
-                      className="text-gray-300 hover:text-red-500 cursor-pointer transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-
-                <input
-                  type="text"
-                  value={line.label}
-                  onChange={e => updateLine(line.localId, { label: e.target.value })}
-                  placeholder="Libellé (ex. Consultation, ferrure...)"
-                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 text-gray-700"
-                />
-
-                <div className="flex items-center justify-between">
-                  <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Saisie</p>
-                  <div className="flex gap-1">
-                    {(['ht', 'ttc'] as const).map(mode => (
+              return (
+                <div
+                  key={line.localId}
+                  className="bg-white rounded-xl shadow-xs p-4 space-y-3"
+                  style={line.validated ? undefined : { border: '2px solid #bfe0c9' }}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-gray-400">
+                      Ligne {idx + 1}
+                      {line.validated ? (
+                        <span className="ml-1.5 font-normal normal-case inline-flex items-center gap-1" style={{ color: '#2f6b3f' }}>
+                          <Check className="w-3 h-3" /> validée
+                        </span>
+                      ) : (
+                        <span className="ml-1.5 font-normal normal-case" style={{ color: '#2f6b3f' }}>
+                          · reste à ventiler
+                        </span>
+                      )}
+                    </span>
+                    {lines.length > 1 && !line.validated && (
                       <button
-                        key={mode}
                         type="button"
-                        onClick={() => updateLine(line.localId, { amountMode: mode })}
-                        className="text-[10px] font-bold px-2.5 py-1 rounded-full border cursor-pointer transition-all"
-                        style={
-                          line.amountMode === mode
-                            ? { borderColor: '#bfe0c9', backgroundColor: '#f0fbf4', color: '#2f6b3f' }
-                            : { borderColor: '#e5e7eb', backgroundColor: 'white', color: '#9ca3af' }
-                        }
+                        onClick={() => removeLine(line.localId)}
+                        className="text-gray-300 hover:text-red-500 cursor-pointer transition-colors"
                       >
-                        {mode.toUpperCase()}
+                        <Trash2 className="w-4 h-4" />
                       </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1">
-                      {line.amountMode === 'ht' ? 'Montant HT' : 'HT (calculé)'}
-                    </p>
-                    {line.amountMode === 'ht' ? (
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        step="0.01"
-                        value={line.ht}
-                        onChange={e => updateLine(line.localId, { ht: e.target.value })}
-                        placeholder="0.00"
-                        className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 text-gray-700"
-                      />
-                    ) : (
-                      <div className="w-full text-sm border border-gray-100 rounded-lg px-3 py-2 bg-gray-50 text-gray-400">
-                        {htDisplay !== null ? formatEuro(htDisplay) : '—'}
-                      </div>
                     )}
                   </div>
-                  <div>
-                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1">TVA</p>
+
+                  <input
+                    type="text"
+                    value={line.label}
+                    onChange={e => updateLine(line.localId, { label: e.target.value })}
+                    placeholder="Libellé (ex. Consultation, ferrure...)"
+                    disabled={line.validated}
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 text-gray-700 disabled:bg-gray-50 disabled:text-gray-400"
+                  />
+
+                  <div className="flex items-center justify-between">
+                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Saisie</p>
                     <div className="flex gap-1">
-                      {TVA_RATES.map(rate => (
+                      {(['ht', 'ttc'] as const).map(mode => (
                         <button
-                          key={rate}
+                          key={mode}
                           type="button"
-                          onClick={() => updateLine(line.localId, { tvaRate: rate })}
-                          className="flex-1 text-[10px] font-bold py-2 rounded-lg border cursor-pointer transition-all"
+                          disabled={line.validated}
+                          onClick={() => updateLine(line.localId, { amountMode: mode })}
+                          className="text-[10px] font-bold px-2.5 py-1 rounded-full border cursor-pointer transition-all disabled:cursor-not-allowed"
                           style={
-                            line.tvaRate === rate
+                            line.amountMode === mode
                               ? { borderColor: '#bfe0c9', backgroundColor: '#f0fbf4', color: '#2f6b3f' }
                               : { borderColor: '#e5e7eb', backgroundColor: 'white', color: '#9ca3af' }
                           }
                         >
-                          {rate}%
+                          {mode.toUpperCase()}
                         </button>
                       ))}
                     </div>
                   </div>
-                </div>
 
-                <div className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                    {line.amountMode === 'ttc' ? 'Montant TTC' : 'TTC calculé'}
-                  </span>
-                  {line.amountMode === 'ttc' ? (
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      step="0.01"
-                      value={line.ttc}
-                      onChange={e => updateLine(line.localId, { ttc: e.target.value })}
-                      placeholder="0.00"
-                      className="w-24 text-sm text-right border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 text-gray-700"
-                    />
-                  ) : (
-                    <span className="text-sm font-black text-gray-800">{formatEuro(ttc)}</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                        {line.amountMode === 'ht' ? 'Montant HT' : 'HT (calculé)'}
+                      </p>
+                      {line.amountMode === 'ht' ? (
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          step="0.01"
+                          value={line.ht}
+                          onChange={e => updateLine(line.localId, { ht: e.target.value })}
+                          placeholder="0.00"
+                          disabled={line.validated}
+                          className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 text-gray-700 disabled:bg-gray-50 disabled:text-gray-400"
+                        />
+                      ) : (
+                        <div className="w-full text-sm border border-gray-100 rounded-lg px-3 py-2 bg-gray-50 text-gray-400">
+                          {htDisplay !== null ? formatEuro(htDisplay) : '—'}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1">TVA</p>
+                      <div className="flex gap-1">
+                        {TVA_RATES.map(rate => (
+                          <button
+                            key={rate}
+                            type="button"
+                            disabled={line.validated}
+                            onClick={() => updateLine(line.localId, { tvaRate: rate })}
+                            className="flex-1 text-[10px] font-bold py-2 rounded-lg border cursor-pointer transition-all disabled:cursor-not-allowed"
+                            style={
+                              line.tvaRate === rate
+                                ? { borderColor: '#bfe0c9', backgroundColor: '#f0fbf4', color: '#2f6b3f' }
+                                : { borderColor: '#e5e7eb', backgroundColor: 'white', color: '#9ca3af' }
+                            }
+                          >
+                            {rate}%
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                      {line.amountMode === 'ttc' ? 'Montant TTC' : 'TTC calculé'}
+                    </span>
+                    {line.amountMode === 'ttc' ? (
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        step="0.01"
+                        value={line.ttc}
+                        onChange={e => updateLine(line.localId, { ttc: e.target.value })}
+                        placeholder="0.00"
+                        disabled={line.validated}
+                        className="w-24 text-sm text-right border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 text-gray-700 disabled:bg-gray-50 disabled:text-gray-400"
+                      />
+                    ) : (
+                      <span className="text-sm font-black text-gray-800">{formatEuro(ttc)}</span>
+                    )}
+                  </div>
+
+                  <LineVentilation
+                    horses={horses}
+                    ventilationMode={ventilationMode}
+                    singleHorseName={singleHorseName}
+                    horseShares={line.horseShares}
+                    autreLabel={line.autreLabel}
+                    onToggleHorse={horseId => toggleHorseForLine(line.localId, horseId)}
+                    onClearAll={() => clearLineHorses(line.localId)}
+                    onShareChange={(horseId, value) => updateHorseShare(line.localId, horseId, value)}
+                    onAutreLabelChange={value => updateLine(line.localId, { autreLabel: value })}
+                  />
+
+                  {!line.validated && (
+                    <button
+                      type="button"
+                      onClick={() => validateLine(line.localId)}
+                      disabled={!lineValid}
+                      className="w-full font-bold text-sm py-2.5 rounded-xl transition-all disabled:cursor-not-allowed"
+                      style={
+                        lineValid
+                          ? { backgroundColor: '#2f6b3f', color: 'white', cursor: 'pointer' }
+                          : { backgroundColor: '#e5e7eb', color: '#9ca3af' }
+                      }
+                    >
+                      Valider la ligne
+                    </button>
                   )}
                 </div>
-
-                <LineVentilation
-                  horses={horses}
-                  ventilationMode={ventilationMode}
-                  singleHorseName={singleHorseName}
-                  horseShares={line.horseShares}
-                  autreLabel={line.autreLabel}
-                  onToggleHorse={horseId => toggleHorseForLine(line.localId, horseId)}
-                  onClearAll={() => clearLineHorses(line.localId)}
-                  onShareChange={(horseId, value) => updateHorseShare(line.localId, horseId, value)}
-                  onAutreLabelChange={value => updateLine(line.localId, { autreLabel: value })}
-                />
-              </div>
-            )
-          })}
-        </section>
+              )
+            })}
+          </section>
+        )}
 
         {/* ── Total de vérification ── */}
         <section className="bg-white rounded-2xl shadow-xs p-5 text-center">
@@ -752,8 +828,8 @@ export default function SaisieFacture({ onBack }: SaisieFactureProps) {
           </p>
           {hasFactureTotal && (
             <p className="text-xs font-semibold mt-1" style={{ color: overBudget ? '#dc2626' : '#9ca3af' }}>
-              Ventilé : {formatEuro(allLinesTtc)}
-              {overBudget && ` — dépasse le montant de la facture de ${formatEuro(round2(allLinesTtc - factureTotalNum))}`}
+              Ventilé (validé) : {formatEuro(fixedSum)}
+              {overBudget && ` — dépasse le montant de la facture de ${formatEuro(round2(fixedSum - factureTotalNum))}`}
             </p>
           )}
         </section>
