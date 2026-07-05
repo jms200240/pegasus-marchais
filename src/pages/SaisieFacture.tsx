@@ -14,8 +14,7 @@ import {
   sortByCanonicalOrder,
   equalSplit,
   splitTtcByShares,
-  shareRoundingDiff,
-  SHARE_ROUNDING_TOLERANCE,
+  effectiveShares,
 } from '../lib/financeUtils'
 
 const TVA_RATES = [0, 5.5, 10, 20] as const
@@ -85,11 +84,12 @@ function shareSum(shares: Record<string, number>): number {
 }
 
 // Ventilation exactement à 100% — ou, si le TTC de la ligne est connu, dont le
-// bruit d'arrondi résultant reste absorbable (cf. splitTtcByShares).
+// dernier cheval peut être ajusté à 100% avec un bruit d'arrondi absorbable
+// (cf. effectiveShares).
 function isSharesValid(shares: Record<string, number>, ttc = 0): boolean {
   if (Object.keys(shares).length === 0) return false
   if (Math.round(shareSum(shares) * 100) === 10000) return true
-  return ttc > 0 && Math.abs(shareRoundingDiff(ttc, shares)) < SHARE_ROUNDING_TOLERANCE
+  return effectiveShares(shares, ttc).adjustedHorseId !== null
 }
 
 function isLineValid(line: InvoiceLineDraft): boolean {
@@ -130,9 +130,13 @@ function LineVentilation({
   onAutreLabelChange: (value: string) => void
 }) {
   const includedIds = Object.keys(horseShares)
-  const sum = shareSum(horseShares)
-  const isExact = Math.round(sum * 100) === 10000
+  const rawSum = shareSum(horseShares)
+  const isExact = Math.round(rawSum * 100) === 10000
+  const eff = effectiveShares(horseShares, ttc ?? 0)
+  const displayShares = isExact ? horseShares : eff.shares
+  const sum = shareSum(displayShares)
   const valid = isSharesValid(horseShares, ttc ?? 0)
+  const adjustedHorseName = eff.adjustedHorseId ? horses.find(h => h.id === eff.adjustedHorseId)?.name : null
 
   if (ventilationMode === 'single') {
     return (
@@ -213,7 +217,7 @@ function LineVentilation({
                       type="number"
                       inputMode="decimal"
                       step="0.1"
-                      value={horseShares[OTHER_KEY]}
+                      value={displayShares[OTHER_KEY]}
                       onChange={e => onShareChange(OTHER_KEY, parseFloat(e.target.value))}
                       className="w-16 text-xs text-right border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 text-gray-700"
                     />
@@ -232,7 +236,7 @@ function LineVentilation({
                     type="number"
                     inputMode="decimal"
                     step="0.1"
-                    value={horseShares[horseId]}
+                    value={displayShares[horseId]}
                     onChange={e => onShareChange(horseId, parseFloat(e.target.value))}
                     className="w-16 text-xs text-right border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 text-gray-700"
                   />
@@ -247,11 +251,18 @@ function LineVentilation({
             style={{ color: valid ? '#2f6b3f' : '#dc2626' }}
           >
             {valid ? <Check className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
-            Somme : {sum}%{' '}
-            {valid
-              ? !isExact && '— écart d\'arrondi absorbé automatiquement'
-              : '— doit être exactement 100%'}
+            Somme : {sum}% {!valid && '— doit être exactement 100%'}
           </div>
+
+          {valid && adjustedHorseName && eff.adjustedCents > 0 && (
+            <div
+              className="flex items-center gap-1.5 text-[11px] font-semibold rounded-lg px-2.5 py-1.5"
+              style={{ backgroundColor: '#fff7ed', color: '#c2611d' }}
+            >
+              <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+              Arrondi : {eff.adjustedCents} cent{eff.adjustedCents > 1 ? 's' : ''} alloué{eff.adjustedCents > 1 ? 's' : ''} à {adjustedHorseName}
+            </div>
+          )}
         </div>
       )}
     </div>

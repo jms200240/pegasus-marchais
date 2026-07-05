@@ -89,28 +89,61 @@ export function equalSplit(ids: string[]): Record<string, number> {
 // dépasse ~167€ — 10 cts couvre ce cas courant.
 export const SHARE_ROUNDING_TOLERANCE = 0.10
 
-// Écart entre le TTC ciblé et la somme des montants par part une fois chaque
-// part arrondie indépendamment (avant toute correction de reliquat).
-export function shareRoundingDiff(ttc: number, shares: Record<string, number>): number {
-  const sum = round2(
-    Object.keys(shares).reduce((s, id) => s + round2((ttc * (shares[id] || 0)) / 100), 0)
-  )
-  return round2(ttc - sum)
+export interface EffectiveShares {
+  shares: Record<string, number> // parts éventuellement corrigées
+  adjustedHorseId: string | null // cheval ayant reçu la correction, si applicable
+  adjustedCents: number // valeur absolue en centimes, 0 si aucune correction
 }
 
-// Ventile un TTC par part — chaque montant est calculé et arrondi indépendamment.
-// Si l'écart résultant entre la somme des montants et le TTC ciblé reste sous
-// SHARE_ROUNDING_TOLERANCE (bruit d'arrondi), il est absorbé par le dernier
-// cheval de la liste des chevaux sélectionnés pour cette ligne — jamais par
-// la part "Autre" (OTHER_KEY, hors suivi chevaux). Au-delà, l'écart est
-// laissé tel quel (signe d'un problème de ventilation réel).
-export function splitTtcByShares(ttc: number, shares: Record<string, number>): Record<string, number> {
+// Calcule la part "idéale" du dernier cheval de la liste (hors "Autre") pour
+// que la somme atteigne exactement 100%, et l'applique si l'écart monétaire
+// que cela représente pour le TTC de la ligne reste sous SHARE_ROUNDING_TOLERANCE
+// (sinon les parts sont laissées telles quelles — écart trop important pour
+// être un simple bruit d'arrondi).
+export function effectiveShares(rawShares: Record<string, number>, ttc: number): EffectiveShares {
+  const horseIds = Object.keys(rawShares).filter(id => id !== OTHER_KEY)
+  const lastHorseId = horseIds[horseIds.length - 1]
+  if (!lastHorseId || ttc <= 0) {
+    return { shares: rawShares, adjustedHorseId: null, adjustedCents: 0 }
+  }
+
+  const othersSum = round2(
+    Object.keys(rawShares)
+      .filter(id => id !== lastHorseId)
+      .reduce((s, id) => s + (rawShares[id] || 0), 0)
+  )
+  const idealLastShare = round2(100 - othersSum)
+  const pctDiff = round2(idealLastShare - (rawShares[lastHorseId] || 0))
+  if (pctDiff === 0) {
+    return { shares: rawShares, adjustedHorseId: null, adjustedCents: 0 }
+  }
+
+  const monetaryDiff = round2((ttc * pctDiff) / 100)
+  if (Math.abs(monetaryDiff) >= SHARE_ROUNDING_TOLERANCE) {
+    return { shares: rawShares, adjustedHorseId: null, adjustedCents: 0 }
+  }
+
+  return {
+    shares: { ...rawShares, [lastHorseId]: idealLastShare },
+    adjustedHorseId: lastHorseId,
+    adjustedCents: Math.round(Math.abs(monetaryDiff) * 100),
+  }
+}
+
+// Ventile un TTC par part — les parts sont d'abord normalisées via
+// effectiveShares (correction du dernier cheval si l'écart est un simple bruit
+// d'arrondi), puis chaque montant est arrondi indépendamment. Filet de
+// sécurité : si un reliquat monétaire subsiste malgré tout (< SHARE_ROUNDING_TOLERANCE),
+// il est absorbé sur ce même dernier cheval — jamais sur la part "Autre".
+export function splitTtcByShares(ttc: number, rawShares: Record<string, number>): Record<string, number> {
+  const { shares } = effectiveShares(rawShares, ttc)
   const result: Record<string, number> = {}
   for (const id of Object.keys(shares)) {
     result[id] = round2((ttc * (shares[id] || 0)) / 100)
   }
 
-  const diff = shareRoundingDiff(ttc, shares)
+  const sum = round2(Object.values(result).reduce((s, v) => s + v, 0))
+  const diff = round2(ttc - sum)
   if (Math.abs(diff) < SHARE_ROUNDING_TOLERANCE) {
     const horseIds = Object.keys(shares).filter(id => id !== OTHER_KEY)
     const lastHorseId = horseIds[horseIds.length - 1]
