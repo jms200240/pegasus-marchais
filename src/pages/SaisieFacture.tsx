@@ -30,9 +30,13 @@ interface InvoiceLineDraft {
   tvaRate: TvaRate
   horseShares: Record<string, number> // horseId | OTHER_KEY -> % (uniquement éléments inclus)
   autreLabel: string // nom libre quand OTHER_KEY est inclus (ex. "Scoubidou")
+  // Ligne de solde auto-gérée (montant = reste à ventiler, recalculé en temps réel)
+  // — perd ce statut dès que l'utilisateur modifie la ligne, ce qui fait alors
+  // apparaître une nouvelle ligne de solde derrière elle si un écart subsiste.
+  isAutoTail?: boolean
 }
 
-function makeBlankLine(horseShares: Record<string, number>): InvoiceLineDraft {
+function makeBlankLine(horseShares: Record<string, number>, overrides: Partial<InvoiceLineDraft> = {}): InvoiceLineDraft {
   return {
     localId: crypto.randomUUID(),
     label: '',
@@ -42,6 +46,7 @@ function makeBlankLine(horseShares: Record<string, number>): InvoiceLineDraft {
     tvaRate: 20,
     horseShares,
     autreLabel: '',
+    ...overrides,
   }
 }
 
@@ -246,11 +251,8 @@ export default function SaisieFacture({ onBack }: SaisieFactureProps) {
 
   // ── Montant total de la facture (référence papier) ────────────────────────
   const [factureTotalTtc, setFactureTotalTtc] = useState('')
-
-  // ── Ligne de solde automatique (reste à ventiler) ──────────────────────────
-  const [remainderLabel, setRemainderLabel] = useState('')
-  const [remainderShares, setRemainderShares] = useState<Record<string, number>>({})
-  const [remainderAutreLabel, setRemainderAutreLabel] = useState('')
+  const factureTotalNum = parseFloat(factureTotalTtc)
+  const hasFactureTotal = !isNaN(factureTotalNum) && factureTotalNum > 0
 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -267,10 +269,34 @@ export default function SaisieFacture({ onBack }: SaisieFactureProps) {
   useEffect(() => {
     if (horses.length > 0 && lines.length === 0) {
       const defaultShares = equalSplit(horses.map(h => h.id))
-      setLines([makeBlankLine(defaultShares)])
-      setRemainderShares(defaultShares)
+      setLines([makeBlankLine(defaultShares, { amountMode: 'ttc', isAutoTail: true })])
     }
   }, [horses]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Ligne de solde automatique : tant que le montant total de la facture n'est
+  // pas atteint par les lignes "fixées" (non auto-gérées), maintient une unique
+  // ligne de solde à la fin, dont le montant TTC suit le reste à ventiler.
+  useEffect(() => {
+    if (!hasFactureTotal) return
+    const fixedSum = round2(lines.filter(l => !l.isAutoTail).reduce((sum, l) => sum + lineTtc(l), 0))
+    const remainder = round2(factureTotalNum - fixedSum)
+    const tail = lines.find(l => l.isAutoTail)
+    if (remainder > 0.004) {
+      const remainderStr = String(remainder)
+      if (tail) {
+        if (tail.ttc !== remainderStr) {
+          setLines(prev => prev.map(l => (l.isAutoTail ? { ...l, ttc: remainderStr } : l)))
+        }
+      } else {
+        setLines(prev => [
+          ...prev,
+          makeBlankLine(currentDefaultShares(), { amountMode: 'ttc', ttc: remainderStr, isAutoTail: true }),
+        ])
+      }
+    } else if (tail) {
+      setLines(prev => prev.filter(l => !l.isAutoTail))
+    }
+  }, [lines, factureTotalNum, hasFactureTotal]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function currentDefaultShares(): Record<string, number> {
     if (ventilationMode === 'single' && singleHorseId) return { [singleHorseId]: 100 }
@@ -284,17 +310,14 @@ export default function SaisieFacture({ onBack }: SaisieFactureProps) {
       setSingleHorseId(null)
       const shares = equalSplit(horses.map(h => h.id))
       setLines(prev => prev.map(l => ({ ...l, horseShares: shares })))
-      setRemainderShares(shares)
     } else {
       setLines(prev => prev.map(l => ({ ...l, horseShares: {} })))
-      setRemainderShares({})
     }
   }
 
   function selectSingleHorse(horseId: string) {
     setSingleHorseId(horseId)
     setLines(prev => prev.map(l => ({ ...l, horseShares: { [horseId]: 100 } })))
-    setRemainderShares({ [horseId]: 100 })
   }
 
   function addLine() {
@@ -305,8 +328,15 @@ export default function SaisieFacture({ onBack }: SaisieFactureProps) {
     setLines(prev => (prev.length > 1 ? prev.filter(l => l.localId !== localId) : prev))
   }
 
+  // Modifier le montant (HT/TTC/TVA/mode) d'une ligne de solde auto lui retire
+  // ce statut — elle devient fixe, et une nouvelle ligne de solde apparaîtra
+  // derrière elle si un écart subsiste (cf. effet ci-dessus). Le libellé et la
+  // ventilation restent librement modifiables sans casser le suivi automatique.
   function updateLine(localId: string, patch: Partial<InvoiceLineDraft>) {
-    setLines(prev => prev.map(l => (l.localId === localId ? { ...l, ...patch } : l)))
+    const touchesAmount = 'ht' in patch || 'ttc' in patch || 'amountMode' in patch || 'tvaRate' in patch
+    setLines(prev =>
+      prev.map(l => (l.localId === localId ? { ...l, ...patch, ...(touchesAmount ? { isAutoTail: false } : {}) } : l))
+    )
   }
 
   function toggleHorseForLine(localId: string, horseId: string) {
@@ -336,28 +366,8 @@ export default function SaisieFacture({ onBack }: SaisieFactureProps) {
     )
   }
 
-  function toggleHorseForRemainder(horseId: string) {
-    const included = Object.keys(remainderShares)
-    const nextIncluded = included.includes(horseId)
-      ? included.filter(id => id !== horseId)
-      : [...included, horseId]
-    setRemainderShares(equalSplit(nextIncluded))
-  }
-
-  function updateRemainderShare(horseId: string, value: number) {
-    setRemainderShares(prev => ({ ...prev, [horseId]: isNaN(value) ? 0 : value }))
-  }
-
-  const manualLinesTtc = round2(lines.reduce((sum, l) => sum + lineTtc(l), 0))
-  const factureTotalNum = parseFloat(factureTotalTtc)
-  const hasFactureTotal = !isNaN(factureTotalNum) && factureTotalNum > 0
-  const remainderTtc = hasFactureTotal ? round2(factureTotalNum - manualLinesTtc) : 0
-  const showRemainderLine = hasFactureTotal && remainderTtc > 0.004
-  const overBudget = hasFactureTotal && remainderTtc < -0.004
-
-  const remainderOtherNamed = !(OTHER_KEY in remainderShares) || remainderAutreLabel.trim() !== ''
-  const remainderValid =
-    !showRemainderLine || (remainderLabel.trim() !== '' && isSharesValid(remainderShares) && remainderOtherNamed)
+  const allLinesTtc = round2(lines.reduce((sum, l) => sum + lineTtc(l), 0))
+  const overBudget = hasFactureTotal && round2(allLinesTtc - factureTotalNum) > 0.004
 
   const linesValid = lines.length > 0 && lines.every(isLineValid)
   const modeValid = ventilationMode === 'multiple' || singleHorseId !== null
@@ -368,7 +378,6 @@ export default function SaisieFacture({ onBack }: SaisieFactureProps) {
     !overBudget &&
     linesValid &&
     modeValid &&
-    remainderValid &&
     !saving
 
   function resetForm() {
@@ -378,11 +387,8 @@ export default function SaisieFacture({ onBack }: SaisieFactureProps) {
     setVentilationMode('multiple')
     setSingleHorseId(null)
     setFactureTotalTtc('')
-    setRemainderLabel('')
-    setRemainderAutreLabel('')
     const defaultShares = equalSplit(horses.map(h => h.id))
-    setLines([makeBlankLine(defaultShares)])
-    setRemainderShares(defaultShares)
+    setLines([makeBlankLine(defaultShares, { amountMode: 'ttc', isAutoTail: true })])
   }
 
   async function handleValidate() {
@@ -392,24 +398,8 @@ export default function SaisieFacture({ onBack }: SaisieFactureProps) {
     setSuccessMessage(null)
 
     try {
-      const allLines: InvoiceLineDraft[] = showRemainderLine
-        ? [
-            ...lines,
-            {
-              localId: 'remainder',
-              label: remainderLabel.trim(),
-              amountMode: 'ttc',
-              ht: '',
-              ttc: String(remainderTtc),
-              tvaRate: 20,
-              horseShares: remainderShares,
-              autreLabel: remainderAutreLabel,
-            },
-          ]
-        : lines
-
       const traceNotes: string[] = []
-      const expenseRowsDraft = allLines.flatMap(line => {
+      const expenseRowsDraft = lines.flatMap(line => {
         const perHorse = splitTtcByShares(lineTtc(line), line.horseShares)
         const otherAmount = perHorse[OTHER_KEY]
         if (otherAmount && otherAmount > 0) {
@@ -620,10 +610,21 @@ export default function SaisieFacture({ onBack }: SaisieFactureProps) {
             const htDisplay = lineHtDisplay(line)
 
             return (
-              <div key={line.localId} className="bg-white rounded-xl shadow-xs p-4 space-y-3">
+              <div
+                key={line.localId}
+                className="bg-white rounded-xl shadow-xs p-4 space-y-3"
+                style={line.isAutoTail ? { border: '2px solid #bfe0c9' } : undefined}
+              >
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-gray-400">Ligne {idx + 1}</span>
-                  {lines.length > 1 && (
+                  <span className="text-xs font-bold text-gray-400">
+                    Ligne {idx + 1}
+                    {line.isAutoTail && (
+                      <span className="ml-1.5 font-normal normal-case" style={{ color: '#2f6b3f' }}>
+                        · reste à ventiler
+                      </span>
+                    )}
+                  </span>
+                  {lines.length > 1 && !line.isAutoTail && (
                     <button
                       type="button"
                       onClick={() => removeLine(line.localId)}
@@ -739,42 +740,6 @@ export default function SaisieFacture({ onBack }: SaisieFactureProps) {
               </div>
             )
           })}
-
-          {/* ── Ligne de solde automatique — tant que le montant de la facture n'est pas atteint ── */}
-          {showRemainderLine && (
-            <div className="bg-white rounded-xl shadow-xs p-4 space-y-3 border-2" style={{ borderColor: '#bfe0c9' }}>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold" style={{ color: '#2f6b3f' }}>Reste à ventiler</span>
-              </div>
-
-              <input
-                type="text"
-                value={remainderLabel}
-                onChange={e => setRemainderLabel(e.target.value)}
-                placeholder="Libellé (ex. Reste de la facture)"
-                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 text-gray-700"
-              />
-
-              <div className="flex items-center justify-between rounded-lg px-3 py-2" style={{ backgroundColor: '#f0fbf4' }}>
-                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#2f6b3f' }}>
-                  Montant TTC restant
-                </span>
-                <span className="text-sm font-black" style={{ color: '#2f6b3f' }}>{formatEuro(remainderTtc)}</span>
-              </div>
-
-              <LineVentilation
-                horses={horses}
-                ventilationMode={ventilationMode}
-                singleHorseName={singleHorseName}
-                horseShares={remainderShares}
-                autreLabel={remainderAutreLabel}
-                onToggleHorse={toggleHorseForRemainder}
-                onClearAll={() => setRemainderShares({})}
-                onShareChange={updateRemainderShare}
-                onAutreLabelChange={setRemainderAutreLabel}
-              />
-            </div>
-          )}
         </section>
 
         {/* ── Total de vérification ── */}
@@ -787,8 +752,8 @@ export default function SaisieFacture({ onBack }: SaisieFactureProps) {
           </p>
           {hasFactureTotal && (
             <p className="text-xs font-semibold mt-1" style={{ color: overBudget ? '#dc2626' : '#9ca3af' }}>
-              Ventilé : {formatEuro(manualLinesTtc + (showRemainderLine ? remainderTtc : 0))}
-              {overBudget && ` — dépasse le montant de la facture de ${formatEuro(-remainderTtc)}`}
+              Ventilé : {formatEuro(allLinesTtc)}
+              {overBudget && ` — dépasse le montant de la facture de ${formatEuro(round2(allLinesTtc - factureTotalNum))}`}
             </p>
           )}
         </section>
