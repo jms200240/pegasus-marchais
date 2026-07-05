@@ -83,12 +83,26 @@ export function equalSplit(ids: string[]): Record<string, number> {
   return shares
 }
 
-// Ventile un TTC par part — chaque montant est calculé et arrondi indépendamment,
-// sans allocation du reliquat d'arrondi à un élément en particulier.
+// Ventile un TTC par part — chaque montant est calculé et arrondi indépendamment.
+// Si l'écart résultant entre la somme des montants et le TTC ciblé reste
+// inférieur à 5 centimes (bruit d'arrondi), il est absorbé par le dernier
+// cheval de la liste des chevaux sélectionnés pour cette ligne — jamais par
+// la part "Autre" (OTHER_KEY, hors suivi chevaux). Au-delà de 5 centimes,
+// l'écart est laissé tel quel (signe d'un problème de ventilation réel).
 export function splitTtcByShares(ttc: number, shares: Record<string, number>): Record<string, number> {
   const result: Record<string, number> = {}
   for (const id of Object.keys(shares)) {
     result[id] = round2((ttc * (shares[id] || 0)) / 100)
+  }
+
+  const sum = round2(Object.values(result).reduce((s, v) => s + v, 0))
+  const diff = round2(ttc - sum)
+  if (Math.abs(diff) < 0.05) {
+    const horseIds = Object.keys(shares).filter(id => id !== OTHER_KEY)
+    const lastHorseId = horseIds[horseIds.length - 1]
+    if (lastHorseId) {
+      result[lastHorseId] = round2(result[lastHorseId] + diff)
+    }
   }
   return result
 }
