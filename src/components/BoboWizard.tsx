@@ -16,7 +16,10 @@ export function FichePathologie({
 }) {
   return (
     <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 backdrop-blur-sm">
-      <div className="w-full max-w-md bg-white rounded-t-3xl p-5 max-h-[85vh] overflow-y-auto no-scrollbar">
+      <div
+        className="w-full max-w-md bg-white rounded-t-3xl px-5 pt-5 max-h-[85vh] overflow-y-auto no-scrollbar"
+        style={{ paddingBottom: 'calc(1rem + 64px + env(safe-area-inset-bottom))' }}
+      >
         <div className="flex items-start justify-between mb-4">
           <div className="flex-1 min-w-0 pr-3">
             <h2 className="text-lg font-black text-gray-900 leading-tight">{pathology.name}</h2>
