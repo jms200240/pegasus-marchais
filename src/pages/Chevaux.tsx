@@ -3,7 +3,6 @@ import { supabase } from '../lib/supabase'
 import type { Horse, HealthEvent } from '../lib/types'
 import { CANONICAL_ORDER, HORSE_COLORS } from '../lib/types'
 import { ChevronRight, ChevronDown, ChevronUp, AlertCircle, Clock, GitBranch } from 'lucide-react'
-import SeverityScale from '../components/SeverityScale'
 import { HORSE_PHOTOS } from '../lib/horsePhotos'
 import GenealogyTreeSheet from '../components/GenealogyTreeSheet'
 
@@ -35,9 +34,6 @@ function HorseCard({
 }) {
   const color = horse.color_hex ?? HORSE_COLORS[horse.name] ?? '#2f6b3f'
   const hasBobos = activeEvents.length > 0
-  const worstSeverity = hasBobos
-    ? Math.max(...activeEvents.map(e => e.severity))
-    : 0
 
   // Calcul contraste : texte blanc si couleur sombre
   const isLight = (hex: string) => {
@@ -95,11 +91,6 @@ function HorseCard({
               </span>
             )}
           </div>
-          {hasBobos && (
-            <div className="mt-1 inline-flex bg-black/15 rounded-full px-1.5 py-1">
-              <SeverityScale value={worstSeverity} size="xs" />
-            </div>
-          )}
         </div>
 
         {/* Chevron */}
@@ -115,7 +106,7 @@ export default function Chevaux({ onSelectHorse }: ChevauxProps) {
   const [activeEvents, setActiveEvents] = useState<Record<string, HealthEvent[]>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [historicalOpen, setHistoricalOpen] = useState(false)
+  const [historicalOpen, setHistoricalOpen] = useState(true)
   const [treeOpen, setTreeOpen] = useState(false)
 
   useEffect(() => {
