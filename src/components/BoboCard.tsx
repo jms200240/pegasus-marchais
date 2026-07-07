@@ -67,6 +67,8 @@ interface VisitModalProps {
   event: HealthEvent
   currentSeverity: number      // sévérité de départ pré-remplie
   defaultVisitedAt?: string    // ISO timestamp ; si absent, utilise maintenant
+  horse?: Horse | null
+  pathology?: Pathology | null
   onClose: () => void
   onSaved: () => void
 }
@@ -75,6 +77,8 @@ export function VisitModal({
   event,
   currentSeverity,
   defaultVisitedAt,
+  horse,
+  pathology,
   onClose,
   onSaved,
 }: VisitModalProps) {
@@ -83,6 +87,27 @@ export function VisitModal({
   const [photos, setPhotos] = useState<File[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showHistory, setShowHistory] = useState(false)
+  const [visits, setVisits] = useState<HealthEventVisit[]>([])
+
+  const titre = getBoboTitle(event, pathology ?? null)
+  const sousTitre = pathology && event.location ? event.location : null
+  const horseColor = horse?.color_hex ?? (horse ? HORSE_COLORS[horse.name] : null) ?? '#2f6b3f'
+
+  useEffect(() => {
+    async function fetchVisits() {
+      const { data, error } = await supabase
+        .from('health_event_visits')
+        .select('*')
+        .eq('health_event_id', event.id)
+        .order('visited_at', { ascending: false })
+      if (!error && data) setVisits(data)
+    }
+    fetchVisits()
+  }, [event.id])
+
+  const hasInitialEntry = !!event.note
+  const totalEntries = visits.length + (hasInitialEntry ? 1 : 0)
 
   async function handleSave(newStatus: 'active' | 'closed') {
     setSubmitting(true)
@@ -145,19 +170,89 @@ export function VisitModal({
     <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40 backdrop-blur-sm">
       <div className="w-full max-w-md bg-white rounded-t-3xl max-h-[85vh] flex flex-col overflow-hidden mb-[calc(1rem+64px+env(safe-area-inset-bottom))]">
         {/* En-tête fixe */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-3 flex-shrink-0">
-          <h3 className="text-base font-bold text-gray-800">Ajouter un suivi</h3>
+        <div className="flex items-start justify-between gap-2 px-5 pt-5 pb-3 flex-shrink-0 border-b border-gray-100">
+          <div className="flex-1 min-w-0">
+            {horse && (
+              <span
+                className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full text-white mb-1"
+                style={{ backgroundColor: horseColor }}
+              >
+                {horse.name}
+              </span>
+            )}
+            <h3 className="text-base font-bold text-gray-800 leading-tight">{titre}</h3>
+            {sousTitre && <p className="text-xs text-gray-400 mt-0.5">{sousTitre}</p>}
+          </div>
           <button
             type="button"
             onClick={onClose}
-            className="w-7 h-7 bg-gray-100 rounded-full flex items-center justify-center cursor-pointer text-gray-400 hover:text-gray-600"
+            className="w-7 h-7 bg-gray-100 rounded-full flex items-center justify-center cursor-pointer text-gray-400 hover:text-gray-600 flex-shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Contenu — seule cette zone défile */}
-        <div className="px-5 space-y-3 overflow-y-auto no-scrollbar flex-1 min-h-0">
+        <div className="px-5 pt-3 space-y-3 overflow-y-auto no-scrollbar flex-1 min-h-0">
+          {/* Historique */}
+          {totalEntries > 0 && (
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowHistory(!showHistory)}
+                className="text-[10px] font-bold text-gray-500 hover:text-gray-700 flex items-center gap-1 cursor-pointer"
+              >
+                Historique ({totalEntries})
+                {showHistory ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              </button>
+
+              {showHistory && (
+                <div className="mt-2 space-y-2 max-h-40 overflow-y-auto no-scrollbar">
+                  {visits.map(v => (
+                    <div key={v.id} className="text-xs bg-gray-50 rounded-lg p-2.5 space-y-1">
+                      <div className="flex justify-between items-center text-[9px] text-gray-400">
+                        <span>{formatDateTime(v.visited_at)}</span>
+                        <div className="flex items-center gap-1.5">
+                          <SeverityScale value={v.severity} size="xs" />
+                          <StatusBadge status={v.status} />
+                        </div>
+                      </div>
+                      {v.note && <p className="text-gray-700 leading-normal">{v.note}</p>}
+                      {v.photo_urls && v.photo_urls.length > 0 && (
+                        <div className="flex gap-1.5 overflow-x-auto no-scrollbar pt-1">
+                          {v.photo_urls.map((url, idx) => (
+                            <img
+                              key={idx}
+                              src={url}
+                              alt={`Photo visite ${idx + 1}`}
+                              className="w-12 h-12 rounded-md object-cover flex-shrink-0"
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {hasInitialEntry && (
+                    <div className="text-xs bg-gray-50/50 rounded-lg p-2.5 space-y-1 border border-dashed border-gray-200">
+                      <div className="flex justify-between items-center text-[9px] text-gray-400">
+                        <span className="font-semibold text-primary/70">Ouverture du bobo</span>
+                        <span>{formatDateTime(event.opened_at)}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-[9px] text-gray-400">
+                        <span className="italic">Note initiale</span>
+                        <div className="flex items-center gap-1.5">
+                          <SeverityScale value={event.severity} size="xs" />
+                          <StatusBadge status="open" />
+                        </div>
+                      </div>
+                      <p className="text-gray-600 leading-normal italic">{event.note}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Note */}
           <div>
             <label className="text-sm font-semibold text-gray-500 block mb-1.5">
@@ -447,6 +542,8 @@ export default function BoboCard({
         <VisitModal
           event={event}
           currentSeverity={currentSeverity}
+          horse={horse}
+          pathology={pathology}
           onClose={() => setShowModifyModal(false)}
           onSaved={() => { fetchVisits(); onUpdated() }}
         />

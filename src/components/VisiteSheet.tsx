@@ -558,7 +558,7 @@ export default function VisiteSheet({ onClose }: VisiteSheetProps) {
                         )}
 
                         {/* Titre */}
-                        <span className="flex-1 min-w-0 text-sm font-bold text-gray-800 truncate">
+                        <span className={`flex-1 min-w-0 text-sm font-bold text-gray-800 ${isOpen ? '' : 'truncate'}`}>
                           {titre}
                         </span>
 
@@ -732,6 +732,8 @@ export default function VisiteSheet({ onClose }: VisiteSheetProps) {
           event={visitModalBobo.event}
           currentSeverity={visitModalBobo.lastVisit?.severity ?? visitModalBobo.event.severity}
           defaultVisitedAt={fromDatetimeLocal(visitedAt)}
+          horse={visitModalBobo.horse}
+          pathology={visitModalBobo.pathology}
           onClose={() => setVisitModalBoboId(null)}
           onSaved={() => {
             setVisitModalBoboId(null)
