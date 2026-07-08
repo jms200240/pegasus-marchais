@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Check, Pencil, Ban, RotateCcw } from 'lucide-react'
+import { ArrowLeft, Check, Pencil, Ban, RotateCcw, Dices } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { AdminUser } from '../lib/types'
 import type { UserRole } from '../lib/useUserRole'
@@ -22,6 +22,14 @@ export default function GestionAcces({ onBack }: { onBack: () => void }) {
   const [success, setSuccess] = useState<string | null>(null)
   const [selfEmail, setSelfEmail] = useState<string | null>(null)
   const [revokingEmail, setRevokingEmail] = useState<string | null>(null)
+
+  // Création manuelle de compte
+  const [newEmail, setNewEmail] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [newAccountRole, setNewAccountRole] = useState<UserRole>('famille')
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
+  const [createdInfo, setCreatedInfo] = useState<{ email: string; password: string } | null>(null)
 
   async function fetchUsers() {
     setLoading(true)
@@ -70,6 +78,40 @@ export default function GestionAcces({ onBack }: { onBack: () => void }) {
     setSuccess(null)
   }
 
+  function generatePassword() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
+    let pwd = ''
+    for (let i = 0; i < 10; i++) pwd += chars[Math.floor(Math.random() * chars.length)]
+    setNewPassword(pwd)
+  }
+
+  async function handleCreateAccount() {
+    if (!newEmail.trim() || newPassword.length < 6) return
+    setCreating(true)
+    setCreateError(null)
+    setCreatedInfo(null)
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      const res = await fetch('/api/admin-create-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ email: newEmail.trim(), password: newPassword, role: newAccountRole }),
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Erreur inconnue')
+      setCreatedInfo({ email: newEmail.trim(), password: newPassword })
+      setNewEmail('')
+      setNewPassword('')
+      setNewAccountRole('famille')
+      fetchUsers()
+    } catch (err: any) {
+      setCreateError(err.message || 'Erreur inconnue')
+    } finally {
+      setCreating(false)
+    }
+  }
+
   async function handleToggleBan(u: AdminUser) {
     const action = u.banned ? 'réactiver' : 'révoquer'
     if (!window.confirm(`Confirmer : ${action} l'accès de ${u.email} ?`)) return
@@ -106,6 +148,85 @@ export default function GestionAcces({ onBack }: { onBack: () => void }) {
       </div>
 
       <div className="flex-1 overflow-y-auto no-scrollbar px-4 pb-6 space-y-4">
+        {/* Création manuelle de compte */}
+        <section className="bg-white rounded-2xl shadow-xs p-5 space-y-3">
+          <p className="text-sm font-bold text-gray-800">Créer un compte manuellement</p>
+          <p className="text-[10px] text-gray-400 -mt-2">
+            Pour une personne qui n'a pas accès à l'écran de connexion — communique-lui ensuite ces identifiants toi-même.
+          </p>
+
+          <div>
+            <label className="text-sm font-semibold text-gray-500 block mb-1.5">Adresse email</label>
+            <input
+              type="email"
+              value={newEmail}
+              onChange={e => setNewEmail(e.target.value)}
+              placeholder="prenom@exemple.com"
+              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 text-gray-700"
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-semibold text-gray-500 block mb-1.5">Mot de passe</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newPassword}
+                onChange={e => setNewPassword(e.target.value)}
+                placeholder="6 caractères minimum"
+                className="flex-1 min-w-0 text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 text-gray-700"
+              />
+              <button
+                type="button"
+                onClick={generatePassword}
+                title="Générer un mot de passe"
+                className="w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-500 cursor-pointer transition-colors"
+              >
+                <Dices className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-sm font-semibold text-gray-500 block mb-1.5">Rôle</label>
+            <select
+              value={newAccountRole}
+              onChange={e => setNewAccountRole(e.target.value as UserRole)}
+              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 text-gray-700"
+            >
+              <option value="famille">Famille</option>
+              <option value="groom">Groom</option>
+              <option value="visiteur">Visiteur</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+
+          {createError && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{createError}</p>
+          )}
+          {createdInfo && (
+            <div className="text-sm bg-green-50 border border-green-200 rounded-lg px-3 py-2 space-y-1">
+              <p className="text-green-700 font-semibold flex items-center gap-1.5">
+                <Check className="w-4 h-4 flex-shrink-0" />
+                Compte créé
+              </p>
+              <p className="text-gray-700 text-xs">Email : <span className="font-mono">{createdInfo.email}</span></p>
+              <p className="text-gray-700 text-xs">Mot de passe : <span className="font-mono">{createdInfo.password}</span></p>
+              <p className="text-[10px] text-gray-400">Communique ces identifiants à la personne — ils ne seront plus affichés ensuite.</p>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={handleCreateAccount}
+            disabled={creating || !newEmail.trim() || newPassword.length < 6}
+            className="w-full font-bold text-sm py-3 rounded-xl text-white shadow-sm active:scale-[0.98] transition-transform cursor-pointer disabled:opacity-40"
+            style={{ backgroundColor: '#2f6b3f' }}
+          >
+            {creating ? 'Création…' : 'Créer le compte'}
+          </button>
+        </section>
+
         {/* Formulaire d'attribution */}
         <section className="bg-white rounded-2xl shadow-xs p-5 space-y-3">
           <div>

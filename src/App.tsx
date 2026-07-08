@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Settings } from 'lucide-react'
+import { Settings, KeyRound } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import Login from './pages/Login'
 import BottomNav from './components/BottomNav'
@@ -8,6 +8,7 @@ import type { Session } from '@supabase/supabase-js'
 import { useUserRole } from './lib/useUserRole'
 import { ADMIN_USERS_LAST_SEEN_KEY, newestCreatedAt } from './lib/adminNotifications'
 import type { AdminUser } from './lib/types'
+import ChangePasswordModal from './components/ChangePasswordModal'
 
 // Pages
 import Accueil from './pages/Accueil'
@@ -37,6 +38,9 @@ function App() {
 
   // Pastille de notification — nouveau compte créé depuis la dernière consultation de "Gestion des accès"
   const [hasNewUser, setHasNewUser] = useState(false)
+
+  // Modale "Changer mon mot de passe" — accessible à tout utilisateur connecté
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false)
 
   useEffect(() => {
     if (role !== 'admin') return
@@ -158,6 +162,13 @@ function App() {
                   </button>
                 )}
                 <button
+                  onClick={() => setChangePasswordOpen(true)}
+                  aria-label="Changer mon mot de passe"
+                  className="w-7 h-7 flex items-center justify-center bg-gray-50 hover:bg-gray-100 text-gray-500 hover:text-gray-700 rounded-lg transition-colors cursor-pointer border border-gray-200/50"
+                >
+                  <KeyRound className="w-3.5 h-3.5" />
+                </button>
+                <button
                   onClick={handleSignOut}
                   className="px-2.5 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-500 hover:text-gray-700 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer border border-gray-200/50"
                 >
@@ -165,6 +176,10 @@ function App() {
                 </button>
               </div>
             </header>
+          )}
+
+          {changePasswordOpen && (
+            <ChangePasswordModal onClose={() => setChangePasswordOpen(false)} />
           )}
 
           {/* Contenu principal — padding bas pour ne jamais passer sous la nav flottante */}
