@@ -251,6 +251,7 @@ export interface AdminUser {
   email: string
   name: string | null
   role: 'famille' | 'groom' | 'visiteur' | 'admin'
+  created_at: string
 }
 
 // Ordre canonique des chevaux actifs (codé en dur, côté frontend)

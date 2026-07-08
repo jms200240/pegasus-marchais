@@ -6,6 +6,8 @@ import BottomNav from './components/BottomNav'
 import type { TabType } from './components/BottomNav'
 import type { Session } from '@supabase/supabase-js'
 import { useUserRole } from './lib/useUserRole'
+import { ADMIN_USERS_LAST_SEEN_KEY, newestCreatedAt } from './lib/adminNotifications'
+import type { AdminUser } from './lib/types'
 
 // Pages
 import Accueil from './pages/Accueil'
@@ -32,6 +34,25 @@ function App() {
 
   // Panneau Administration — ouvert depuis la roue crantée de l'en-tête (rôle admin uniquement)
   const [adminOpen, setAdminOpen] = useState(false)
+
+  // Pastille de notification — nouveau compte créé depuis la dernière consultation de "Gestion des accès"
+  const [hasNewUser, setHasNewUser] = useState(false)
+
+  useEffect(() => {
+    if (role !== 'admin') return
+    supabase.rpc('admin_list_users').then(({ data }) => {
+      const list = (data as AdminUser[]) ?? []
+      const newest = newestCreatedAt(list)
+      if (!newest) return
+      const lastSeen = localStorage.getItem(ADMIN_USERS_LAST_SEEN_KEY)
+      if (!lastSeen) {
+        // Premier passage : on ne signale pas rétroactivement les comptes déjà existants
+        localStorage.setItem(ADMIN_USERS_LAST_SEEN_KEY, newest)
+        return
+      }
+      setHasNewUser(newest > lastSeen)
+    })
+  }, [role])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -126,11 +147,14 @@ function App() {
               <div className="flex items-center gap-2">
                 {role === 'admin' && (
                   <button
-                    onClick={() => setAdminOpen(true)}
+                    onClick={() => { setAdminOpen(true); setHasNewUser(false) }}
                     aria-label="Administration"
-                    className="w-7 h-7 flex items-center justify-center bg-gray-50 hover:bg-gray-100 text-gray-500 hover:text-gray-700 rounded-lg transition-colors cursor-pointer border border-gray-200/50"
+                    className="relative w-7 h-7 flex items-center justify-center bg-gray-50 hover:bg-gray-100 text-gray-500 hover:text-gray-700 rounded-lg transition-colors cursor-pointer border border-gray-200/50"
                   >
                     <Settings className="w-3.5 h-3.5" />
+                    {hasNewUser && (
+                      <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full border border-white" />
+                    )}
                   </button>
                 )}
                 <button

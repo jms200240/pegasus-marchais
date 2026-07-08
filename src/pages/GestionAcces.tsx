@@ -3,6 +3,7 @@ import { ArrowLeft, Check } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { AdminUser } from '../lib/types'
 import type { UserRole } from '../lib/useUserRole'
+import { ADMIN_USERS_LAST_SEEN_KEY, newestCreatedAt } from '../lib/adminNotifications'
 
 const ROLE_LABELS: Record<UserRole, string> = {
   famille: 'Famille',
@@ -23,8 +24,16 @@ export default function GestionAcces({ onBack }: { onBack: () => void }) {
   async function fetchUsers() {
     setLoading(true)
     const { data, error } = await supabase.rpc('admin_list_users')
-    if (error) setError(error.message)
-    else setUsers((data as AdminUser[]) ?? [])
+    if (error) {
+      setError(error.message)
+    } else {
+      const list = (data as AdminUser[]) ?? []
+      setUsers(list)
+      // La liste vient d'être consultée : on marque le compte le plus récent comme "vu"
+      // pour faire disparaître la pastille de la roue crantée.
+      const newest = newestCreatedAt(list)
+      if (newest) localStorage.setItem(ADMIN_USERS_LAST_SEEN_KEY, newest)
+    }
     setLoading(false)
   }
 
