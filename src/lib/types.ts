@@ -245,6 +245,14 @@ export interface QuizAttempt {
   answered_at: string
 }
 
+// Retour de la fonction RPC admin_list_users() — réservée au rôle admin
+export interface AdminUser {
+  id: string
+  email: string
+  name: string | null
+  role: 'famille' | 'groom' | 'visiteur' | 'admin'
+}
+
 // Ordre canonique des chevaux actifs (codé en dur, côté frontend)
 export const CANONICAL_ORDER = [
   'Échalote',

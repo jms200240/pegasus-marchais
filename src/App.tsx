@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Settings } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import Login from './pages/Login'
 import BottomNav from './components/BottomNav'
@@ -14,6 +15,7 @@ import FicheCheval from './pages/FicheCheval'
 import Finances from './pages/Finances'
 import GaleriePhotos from './pages/GaleriePhotos'
 import Quiz from './pages/Quiz'
+import AdminSettings from './pages/AdminSettings'
 
 function App() {
   const [session, setSession] = useState<Session | null>(null)
@@ -25,6 +27,9 @@ function App() {
   // Navigation "intra-onglet" pour le module Chevaux
   // null = liste, string = id du cheval sélectionné
   const [selectedHorseId, setSelectedHorseId] = useState<string | null>(null)
+
+  // Panneau Administration — ouvert depuis la roue crantée de l'en-tête (rôle admin uniquement)
+  const [adminOpen, setAdminOpen] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -44,6 +49,7 @@ function App() {
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab)
     setSelectedHorseId(null)
+    setAdminOpen(false)
   }
 
   const handleSignOut = async () => {
@@ -115,18 +121,33 @@ function App() {
                   {session.user.email}
                 </p>
               </div>
-              <button
-                onClick={handleSignOut}
-                className="px-2.5 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-500 hover:text-gray-700 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer border border-gray-200/50"
-              >
-                Quitter
-              </button>
+              <div className="flex items-center gap-2">
+                {role === 'admin' && (
+                  <button
+                    onClick={() => setAdminOpen(true)}
+                    aria-label="Administration"
+                    className="w-7 h-7 flex items-center justify-center bg-gray-50 hover:bg-gray-100 text-gray-500 hover:text-gray-700 rounded-lg transition-colors cursor-pointer border border-gray-200/50"
+                  >
+                    <Settings className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                <button
+                  onClick={handleSignOut}
+                  className="px-2.5 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-500 hover:text-gray-700 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer border border-gray-200/50"
+                >
+                  Quitter
+                </button>
+              </div>
             </header>
           )}
 
           {/* Contenu principal — padding bas pour ne jamais passer sous la nav flottante */}
           <main className="flex-1 flex flex-col overflow-y-auto no-scrollbar min-h-0 pb-24">
-            {renderActivePage()}
+            {adminOpen && role === 'admin' ? (
+              <AdminSettings onBack={() => setAdminOpen(false)} />
+            ) : (
+              renderActivePage()
+            )}
           </main>
 
           {/* Bottom nav — TOUJOURS visible, flottante au-dessus de tous les écrans (y compris les overlays) */}
