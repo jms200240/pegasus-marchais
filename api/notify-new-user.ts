@@ -7,7 +7,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return
   }
 
-  if (req.headers['x-webhook-secret'] !== process.env.WEBHOOK_SECRET) {
+  const providedSecret = req.headers['x-webhook-secret']
+  const expectedSecret = process.env.WEBHOOK_SECRET?.trim()
+  if (typeof providedSecret !== 'string' || providedSecret.trim() !== expectedSecret) {
     res.status(401).json({ error: 'Unauthorized' })
     return
   }
