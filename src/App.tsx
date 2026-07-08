@@ -23,6 +23,8 @@ function App() {
   const [activeTab, setActiveTab] = useState<TabType>('accueil')
   const role = useUserRole(session)
   const readOnly = role === 'visiteur'
+  // Admin a toujours accès à tout ce que Famille a (+ les commandes d'administration)
+  const hasFamilyAccess = role === 'famille' || role === 'admin'
 
   // Navigation "intra-onglet" pour le module Chevaux
   // null = liste, string = id du cheval sélectionné
@@ -79,7 +81,7 @@ function App() {
       case 'quiz':
         return <Quiz userId={session?.user.id ?? ''} />
       case 'finances':
-        return role === 'famille' ? <Finances /> : <Accueil readOnly={readOnly} />
+        return hasFamilyAccess ? <Finances /> : <Accueil readOnly={readOnly} />
       default:
         return <Accueil readOnly={readOnly} />
     }
@@ -155,7 +157,7 @@ function App() {
             className="fixed bottom-0 left-0 right-0 z-[100] w-full max-w-[390px] mx-auto"
             style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
           >
-            <BottomNav activeTab={activeTab} setActiveTab={handleTabChange} showFinances={role === 'famille'} />
+            <BottomNav activeTab={activeTab} setActiveTab={handleTabChange} showFinances={hasFamilyAccess} />
           </div>
         </>
       )}
