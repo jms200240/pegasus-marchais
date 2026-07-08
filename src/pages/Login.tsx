@@ -6,26 +6,43 @@ interface LoginProps {
 }
 
 export default function Login({ onLoginSuccess }: LoginProps) {
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [info, setInfo] = useState<string | null>(null)
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+    setInfo(null)
     setLoading(true)
 
     try {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
-
-      if (signInError) throw signInError
-      onLoginSuccess()
+      if (mode === 'signin') {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        })
+        if (signInError) throw signInError
+        onLoginSuccess()
+      } else {
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+        })
+        if (signUpError) throw signUpError
+        if (data.session) {
+          onLoginSuccess()
+        } else {
+          setInfo('Compte créé. Vérifie ta boîte mail pour confirmer ton adresse, puis connecte-toi.')
+          setMode('signin')
+          setPassword('')
+        }
+      }
     } catch (err: any) {
-      setError(err.message || 'Une erreur est survenue lors de la connexion.')
+      setError(err.message || 'Une erreur est survenue.')
     } finally {
       setLoading(false)
     }
@@ -50,10 +67,15 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-6 shadow-xl rounded-2xl border border-gray-100/50">
-          <form className="space-y-6" onSubmit={handleLogin}>
+          <form className="space-y-6" onSubmit={handleSubmit}>
             {error && (
               <div className="p-3 bg-red-50 border-l-4 border-red-500 rounded-r-md text-xs text-red-700 font-medium">
                 {error}
+              </div>
+            )}
+            {info && (
+              <div className="p-3 bg-green-50 border-l-4 border-green-500 rounded-r-md text-xs text-green-700 font-medium">
+                {info}
               </div>
             )}
 
@@ -86,14 +108,18 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                   id="password"
                   name="password"
                   type="password"
-                  autoComplete="current-password"
+                  autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
                   required
+                  minLength={6}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={loading}
                   className="appearance-none block w-full px-4 py-3 border border-gray-200 rounded-xl shadow-xs placeholder-gray-400 focus:outline-hidden focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-colors disabled:bg-gray-50 disabled:text-gray-400"
                   placeholder="••••••••"
                 />
+                {mode === 'signup' && (
+                  <p className="mt-1 text-[10px] text-gray-400">6 caractères minimum</p>
+                )}
               </div>
             </div>
 
@@ -109,13 +135,31 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
-                    Connexion en cours...
+                    {mode === 'signin' ? 'Connexion en cours...' : 'Création en cours...'}
                   </span>
-                ) : (
+                ) : mode === 'signin' ? (
                   'Se connecter'
+                ) : (
+                  'Créer mon compte'
                 )}
               </button>
             </div>
+
+            <p className="text-center text-xs text-gray-500">
+              {mode === 'signin' ? 'Pas encore de compte ?' : 'Déjà un compte ?'}{' '}
+              <button
+                type="button"
+                onClick={() => {
+                  setMode(mode === 'signin' ? 'signup' : 'signin')
+                  setError(null)
+                  setInfo(null)
+                }}
+                disabled={loading}
+                className="font-semibold text-primary hover:underline cursor-pointer"
+              >
+                {mode === 'signin' ? 'Créer un compte' : 'Se connecter'}
+              </button>
+            </p>
           </form>
         </div>
       </div>

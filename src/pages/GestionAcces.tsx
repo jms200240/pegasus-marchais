@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Check } from 'lucide-react'
+import { ArrowLeft, Check, Pencil, Ban, RotateCcw } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { AdminUser } from '../lib/types'
 import type { UserRole } from '../lib/useUserRole'
@@ -20,6 +20,8 @@ export default function GestionAcces({ onBack }: { onBack: () => void }) {
   const [newRole, setNewRole] = useState<UserRole>('famille')
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState<string | null>(null)
+  const [selfEmail, setSelfEmail] = useState<string | null>(null)
+  const [revokingEmail, setRevokingEmail] = useState<string | null>(null)
 
   async function fetchUsers() {
     setLoading(true)
@@ -39,6 +41,7 @@ export default function GestionAcces({ onBack }: { onBack: () => void }) {
 
   useEffect(() => {
     fetchUsers()
+    supabase.auth.getUser().then(({ data }) => setSelfEmail(data.user?.email ?? null))
   }, [])
 
   async function handleSubmit() {
@@ -58,6 +61,32 @@ export default function GestionAcces({ onBack }: { onBack: () => void }) {
       fetchUsers()
     }
     setSubmitting(false)
+  }
+
+  function handleEdit(u: AdminUser) {
+    setEmail(u.email)
+    setNewRole(u.role)
+    setError(null)
+    setSuccess(null)
+  }
+
+  async function handleToggleBan(u: AdminUser) {
+    const action = u.banned ? 'réactiver' : 'révoquer'
+    if (!window.confirm(`Confirmer : ${action} l'accès de ${u.email} ?`)) return
+
+    setRevokingEmail(u.email)
+    setError(null)
+    setSuccess(null)
+    const { error } = await supabase.rpc(u.banned ? 'admin_restore_access' : 'admin_revoke_access', {
+      target_email: u.email,
+    })
+    if (error) {
+      setError(error.message)
+    } else {
+      setSuccess(u.banned ? `Accès réactivé pour ${u.email}` : `Accès révoqué pour ${u.email}`)
+      fetchUsers()
+    }
+    setRevokingEmail(null)
   }
 
   return (
@@ -139,20 +168,47 @@ export default function GestionAcces({ onBack }: { onBack: () => void }) {
             <p className="text-sm text-gray-400 italic">Aucun compte trouvé.</p>
           ) : (
             <div className="space-y-2">
-              {users.map(u => (
-                <div
-                  key={u.id}
-                  className="bg-white rounded-xl shadow-xs px-4 py-3 flex items-center justify-between gap-2"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-bold text-gray-800 truncate">{u.name ?? u.email}</p>
-                    <p className="text-xs text-gray-400 truncate">{u.email}</p>
+              {users.map(u => {
+                const isSelf = selfEmail !== null && u.email === selfEmail
+                return (
+                  <div
+                    key={u.id}
+                    className="bg-white rounded-xl shadow-xs px-4 py-3 flex items-center justify-between gap-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-gray-800 truncate">{u.name ?? u.email}</p>
+                      <p className="text-xs text-gray-400 truncate">{u.email}</p>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      {u.banned && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700 uppercase tracking-wider">
+                          Révoqué
+                        </span>
+                      )}
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 uppercase tracking-wider">
+                        {ROLE_LABELS[u.role]}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleEdit(u)}
+                        title="Modifier le rôle"
+                        className="w-7 h-7 flex items-center justify-center rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-400 hover:text-gray-600 cursor-pointer transition-colors"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleBan(u)}
+                        disabled={isSelf || revokingEmail === u.email}
+                        title={isSelf ? 'Impossible de révoquer son propre accès' : u.banned ? "Réactiver l'accès" : "Révoquer l'accès"}
+                        className="w-7 h-7 flex items-center justify-center rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-400 hover:text-red-600 cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        {u.banned ? <RotateCcw className="w-3.5 h-3.5" /> : <Ban className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
                   </div>
-                  <span className="flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 uppercase tracking-wider">
-                    {ROLE_LABELS[u.role]}
-                  </span>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </section>
