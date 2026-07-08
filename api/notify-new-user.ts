@@ -2,6 +2,19 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import nodemailer from 'nodemailer'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Diagnostic temporaire — ne révèle aucune valeur, juste la présence/longueur
+  // des variables d'environnement attendues. À retirer une fois le 401 résolu.
+  if (req.method === 'GET' && req.query.debug === '1') {
+    res.status(200).json({
+      GMAIL_USER: !!process.env.GMAIL_USER,
+      GMAIL_APP_PASSWORD: !!process.env.GMAIL_APP_PASSWORD,
+      ADMIN_EMAIL: !!process.env.ADMIN_EMAIL,
+      WEBHOOK_SECRET_present: !!process.env.WEBHOOK_SECRET,
+      WEBHOOK_SECRET_length: process.env.WEBHOOK_SECRET?.trim().length ?? 0,
+    })
+    return
+  }
+
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' })
     return
