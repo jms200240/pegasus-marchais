@@ -52,11 +52,35 @@ export default function QuizPlay({ userId, onFinish }: QuizPlayProps) {
       const [{ data: qData }, { data: hData }, { data: attemptsData }] = await Promise.all([
         supabase.from('quiz_questions').select('*').eq('is_active', true).eq('reported', false),
         supabase.from('horses').select('*'),
-        supabase.from('quiz_attempts').select('question_id').eq('user_id', userId),
+        supabase
+          .from('quiz_attempts')
+          .select('question_id, is_correct, answered_at')
+          .eq('user_id', userId)
+          .order('answered_at', { ascending: true }),
       ])
       const allQuestions = (qData as QuizQuestion[]) ?? []
-      const askedIds = new Set((attemptsData as { question_id: string }[] ?? []).map(a => a.question_id))
-      const remaining = allQuestions.filter(q => !askedIds.has(q.id))
+      const attempts = (attemptsData as { question_id: string; is_correct: boolean; answered_at: string }[]) ?? []
+
+      // Une question mal répondue est reproposée après ~2 parties (RESURFACE_AFTER
+      // tentatives, tous types de questions confondus) plutôt que d'être exclue
+      // définitivement comme une question réussie.
+      const RESURFACE_AFTER = 2 * SESSION_SIZE
+      const lastAttemptByQuestion = new Map<string, { isCorrect: boolean; index: number }>()
+      attempts.forEach((a, i) => {
+        lastAttemptByQuestion.set(a.question_id, { isCorrect: a.is_correct, index: i })
+      })
+      const totalAttempts = attempts.length
+      const excludedIds = new Set<string>()
+      lastAttemptByQuestion.forEach(({ isCorrect, index }, questionId) => {
+        if (isCorrect) {
+          excludedIds.add(questionId)
+        } else {
+          const attemptsSinceMiss = totalAttempts - 1 - index
+          if (attemptsSinceMiss < RESURFACE_AFTER) excludedIds.add(questionId)
+        }
+      })
+
+      const remaining = allQuestions.filter(q => !excludedIds.has(q.id))
       // Une fois toutes les questions posées à cet utilisateur, on repart sur
       // l'ensemble complet (les points/tentatives déjà enregistrés ne sont pas effacés).
       const pool = remaining.length > 0 ? remaining : allQuestions
