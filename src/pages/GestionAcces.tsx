@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, Check, Pencil, Ban, RotateCcw, Dices } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { AdminUser } from '../lib/types'
@@ -22,6 +22,8 @@ export default function GestionAcces({ onBack }: { onBack: () => void }) {
   const [success, setSuccess] = useState<string | null>(null)
   const [selfEmail, setSelfEmail] = useState<string | null>(null)
   const [revokingEmail, setRevokingEmail] = useState<string | null>(null)
+  const [editingEmail, setEditingEmail] = useState<string | null>(null)
+  const roleFormRef = useRef<HTMLDivElement>(null)
 
   // Création manuelle de compte
   const [newEmail, setNewEmail] = useState('')
@@ -38,7 +40,9 @@ export default function GestionAcces({ onBack }: { onBack: () => void }) {
       setError(error.message)
     } else {
       const list = (data as AdminUser[]) ?? []
-      setUsers(list)
+      // Comptes actifs d'abord, révoqués à la fin
+      const sorted = [...list].sort((a, b) => Number(a.banned) - Number(b.banned))
+      setUsers(sorted)
       // La liste vient d'être consultée : on marque le compte le plus récent comme "vu"
       // pour faire disparaître la pastille de la roue crantée.
       const newest = newestCreatedAt(list)
@@ -66,6 +70,7 @@ export default function GestionAcces({ onBack }: { onBack: () => void }) {
     } else {
       setSuccess(`Rôle "${ROLE_LABELS[newRole]}" attribué à ${email.trim()}`)
       setEmail('')
+      setEditingEmail(null)
       fetchUsers()
     }
     setSubmitting(false)
@@ -74,8 +79,10 @@ export default function GestionAcces({ onBack }: { onBack: () => void }) {
   function handleEdit(u: AdminUser) {
     setEmail(u.email)
     setNewRole(u.role)
+    setEditingEmail(u.email)
     setError(null)
     setSuccess(null)
+    roleFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   function generatePassword() {
@@ -228,7 +235,22 @@ export default function GestionAcces({ onBack }: { onBack: () => void }) {
         </section>
 
         {/* Formulaire d'attribution */}
-        <section className="bg-white rounded-2xl shadow-xs p-5 space-y-3">
+        <section
+          ref={roleFormRef}
+          className={`bg-white rounded-2xl shadow-xs p-5 space-y-3 ${editingEmail ? 'ring-2 ring-primary/40' : ''}`}
+        >
+          {editingEmail && (
+            <div className="flex items-center justify-between bg-primary/5 rounded-lg px-3 py-2">
+              <p className="text-xs font-semibold text-primary">Modification de {editingEmail}</p>
+              <button
+                type="button"
+                onClick={() => { setEditingEmail(null); setEmail(''); setNewRole('famille') }}
+                className="text-[10px] font-bold text-gray-400 hover:text-gray-600 cursor-pointer uppercase tracking-wider"
+              >
+                Annuler
+              </button>
+            </div>
+          )}
           <div>
             <label className="text-sm font-semibold text-gray-500 block mb-1.5">Adresse email</label>
             <input
