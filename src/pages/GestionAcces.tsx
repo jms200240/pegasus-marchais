@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, Check, Pencil, Ban, RotateCcw, Dices } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { AdminUser } from '../lib/types'
+import { formatDateTime } from '../lib/types'
 import type { UserRole } from '../lib/useUserRole'
 import { ADMIN_USERS_LAST_SEEN_KEY, newestCreatedAt } from '../lib/adminNotifications'
 
@@ -10,6 +11,14 @@ const ROLE_LABELS: Record<UserRole, string> = {
   groom: 'Groom',
   visiteur: 'Visiteur',
   admin: 'Admin',
+}
+
+// Du plus ouvert au plus fermé
+const ROLE_RANK: Record<UserRole, number> = {
+  admin: 0,
+  famille: 1,
+  groom: 2,
+  visiteur: 3,
 }
 
 export default function GestionAcces({ onBack }: { onBack: () => void }) {
@@ -40,8 +49,13 @@ export default function GestionAcces({ onBack }: { onBack: () => void }) {
       setError(error.message)
     } else {
       const list = (data as AdminUser[]) ?? []
-      // Comptes actifs d'abord, révoqués à la fin
-      const sorted = [...list].sort((a, b) => Number(a.banned) - Number(b.banned))
+      // Comptes actifs d'abord, révoqués à la fin ; au sein de chaque groupe, du rôle
+      // le plus ouvert (Admin) au plus fermé (Visiteur)
+      const sorted = [...list].sort((a, b) => {
+        const bannedDiff = Number(a.banned) - Number(b.banned)
+        if (bannedDiff !== 0) return bannedDiff
+        return ROLE_RANK[a.role] - ROLE_RANK[b.role]
+      })
       setUsers(sorted)
       // La liste vient d'être consultée : on marque le compte le plus récent comme "vu"
       // pour faire disparaître la pastille de la roue crantée.
@@ -239,6 +253,7 @@ export default function GestionAcces({ onBack }: { onBack: () => void }) {
           ref={roleFormRef}
           className={`bg-white rounded-2xl shadow-xs p-5 space-y-3 ${editingEmail ? 'ring-2 ring-primary/40' : ''}`}
         >
+          <p className="text-sm font-bold text-gray-800">Attribuer un compte</p>
           {editingEmail && (
             <div className="flex items-center justify-between bg-primary/5 rounded-lg px-3 py-2">
               <p className="text-xs font-semibold text-primary">Modification de {editingEmail}</p>
@@ -321,6 +336,9 @@ export default function GestionAcces({ onBack }: { onBack: () => void }) {
                     <div className="min-w-0">
                       <p className="text-sm font-bold text-gray-800 truncate">{u.name ?? u.email}</p>
                       <p className="text-xs text-gray-400 truncate">{u.email}</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">
+                        Dernière connexion : {u.last_sign_in_at ? formatDateTime(u.last_sign_in_at) : 'Jamais'}
+                      </p>
                     </div>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
                       {u.banned && (

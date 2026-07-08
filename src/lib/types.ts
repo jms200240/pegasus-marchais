@@ -253,6 +253,7 @@ export interface AdminUser {
   role: 'famille' | 'groom' | 'visiteur' | 'admin'
   created_at: string
   banned: boolean
+  last_sign_in_at: string | null
 }
 
 // Ordre canonique des chevaux actifs (codé en dur, côté frontend)
