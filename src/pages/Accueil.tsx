@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { AmbiancePhoto, FarmAlert } from '../lib/types'
 import { formatDateTime } from '../lib/types'
-import { Wheat, Droplets, CalendarCheck, Image as ImageIcon, Stethoscope, CheckCircle2 } from 'lucide-react'
+import { Wheat, Droplets, CalendarCheck, Image as ImageIcon, Stethoscope } from 'lucide-react'
 import { todayYmd } from '../lib/financeUtils'
 import VisiteSheet from '../components/VisiteSheet'
 import VisiteProSheet from '../components/VisiteProSheet'
@@ -34,38 +34,17 @@ export default function Accueil({
   const [loading, setLoading] = useState(true)
   const [visiteOpen, setVisiteOpen] = useState(false)
   const [visiteProOpen, setVisiteProOpen] = useState(false)
-  const [visitedToday, setVisitedToday] = useState(false)
-  const [checkingIn, setCheckingIn] = useState(false)
 
-  async function fetchGroomVisits() {
-    if (!isGroom || !userId) return
-    const { data, error } = await supabase
-      .from('groom_visits')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('visit_date', todayYmd())
-      .limit(1)
-    if (error) {
-      console.error('Erreur chargement visites groom:', error)
-      return
-    }
-    setVisitedToday(((data as { id: string }[]) ?? []).length > 0)
-  }
-
-  async function handleCheckIn() {
-    if (!userId || checkingIn) return
-    setCheckingIn(true)
-    try {
+  // Écran identique à la Famille pour le groom — le check-in (comptage des
+  // jours payés) est silencieux, greffé sur le clic "Démarrer une visite".
+  function handleStartVisite() {
+    if (isGroom && userId) {
       // amount_ttc utilise le défaut base (7.00 €) ; paid_month vide tant
       // que le mois n'a pas été soldé par la Famille (colonne NOT NULL sans défaut).
-      const { error } = await supabase.from('groom_visits').insert({ user_id: userId, visit_date: todayYmd(), paid_month: '' })
-      if (error) throw error
-      await fetchGroomVisits()
-    } catch (err) {
-      console.error('Erreur enregistrement visite groom:', err)
-    } finally {
-      setCheckingIn(false)
+      supabase.from('groom_visits').insert({ user_id: userId, visit_date: todayYmd(), paid_month: '' })
+        .then(({ error }) => { if (error) console.error('Erreur enregistrement visite groom:', error) })
     }
+    setVisiteOpen(true)
   }
 
   async function fetchData() {
@@ -88,8 +67,6 @@ export default function Accueil({
       // Photo aléatoire, retirée à chaque ouverture de la page (pas la dernière).
       const photos = (photosData as AmbiancePhoto[]) ?? []
       setRandomPhoto(photos.length > 0 ? photos[Math.floor(Math.random() * photos.length)] : null)
-
-      await fetchGroomVisits()
     } catch (err) {
       console.error('Erreur chargement Accueil:', err)
     } finally {
@@ -97,7 +74,7 @@ export default function Accueil({
     }
   }
 
-  useEffect(() => { fetchData() }, [isGroom, userId])
+  useEffect(() => { fetchData() }, [])
 
   // Rafraîchit les données à la fermeture de VisiteSheet
   function handleVisiteClose() {
@@ -148,50 +125,17 @@ export default function Accueil({
                 </div>
               )}
 
-              {/* ── Bouton Démarrer une visite ── */}
-              {!readOnly && (
+              {/* ── Bouton Démarrer une visite (identique Famille/Groom — check-in silencieux pour le groom) ── */}
+              {(!readOnly || isGroom) && (
                 <button
                   type="button"
-                  onClick={() => setVisiteOpen(true)}
+                  onClick={handleStartVisite}
                   className="w-full flex items-center justify-center gap-2.5 font-bold text-sm text-white rounded-xl shadow-sm active:scale-[0.98] transition-transform cursor-pointer"
                   style={{ backgroundColor: '#2f6b3f', minHeight: '56px' }}
                 >
                   <CalendarCheck className="w-5 h-5" />
                   Démarrer une visite
                 </button>
-              )}
-
-              {/* ── Check-in Groom : visite du jour ── */}
-              {isGroom && (
-                <section className="bg-white rounded-2xl shadow-xs p-5 text-center space-y-3">
-                  {visitedToday ? (
-                    <>
-                      <div className="flex items-center justify-center gap-2 text-primary">
-                        <CheckCircle2 className="w-5 h-5" />
-                        <p className="text-sm font-bold">Visite du jour enregistrée</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleCheckIn}
-                        disabled={checkingIn}
-                        className="text-[11px] text-gray-400 underline cursor-pointer disabled:opacity-50"
-                      >
-                        Enregistrer une 2ᵉ visite (ne compte pas dans le mois)
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={handleCheckIn}
-                      disabled={checkingIn}
-                      className="w-full flex items-center justify-center gap-2.5 font-bold text-sm text-white rounded-xl shadow-sm active:scale-[0.98] transition-transform cursor-pointer disabled:opacity-60"
-                      style={{ backgroundColor: '#2f6b3f', minHeight: '56px' }}
-                    >
-                      <CalendarCheck className="w-5 h-5" />
-                      {checkingIn ? 'Enregistrement...' : "J'arrive aujourd'hui"}
-                    </button>
-                  )}
-                </section>
               )}
 
               {/* ── Photo d'ambiance (aléatoire à chaque ouverture) ── */}
