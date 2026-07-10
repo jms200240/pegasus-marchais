@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import type { AmbiancePhoto, FarmAlert } from '../lib/types'
+import type { AmbiancePhoto, FarmAlert, GroomVisit } from '../lib/types'
 import { formatDateTime } from '../lib/types'
-import { Wheat, Droplets, CalendarCheck, Image as ImageIcon, Stethoscope } from 'lucide-react'
+import { Wheat, Droplets, CalendarCheck, Image as ImageIcon, Stethoscope, CheckCircle2 } from 'lucide-react'
+import { todayYmd } from '../lib/financeUtils'
 import VisiteSheet from '../components/VisiteSheet'
 import VisiteProSheet from '../components/VisiteProSheet'
 
@@ -19,12 +20,58 @@ function Spinner() {
 }
 
 // ─── Page Accueil ─────────────────────────────────────────────────────────────
-export default function Accueil({ readOnly = false }: { readOnly?: boolean }) {
+export default function Accueil({
+  readOnly = false,
+  isGroom = false,
+  userId = '',
+}: {
+  readOnly?: boolean
+  isGroom?: boolean
+  userId?: string
+}) {
   const [alerts, setAlerts] = useState<Record<string, boolean>>({ foin: false, eau: false })
   const [randomPhoto, setRandomPhoto] = useState<AmbiancePhoto | null>(null)
   const [loading, setLoading] = useState(true)
   const [visiteOpen, setVisiteOpen] = useState(false)
   const [visiteProOpen, setVisiteProOpen] = useState(false)
+  const [visitedToday, setVisitedToday] = useState(false)
+  const [daysThisMonth, setDaysThisMonth] = useState(0)
+  const [checkingIn, setCheckingIn] = useState(false)
+
+  async function fetchGroomVisits() {
+    if (!isGroom || !userId) return
+    const today = todayYmd()
+    const monthStart = `${today.slice(0, 7)}-01`
+    const { data, error } = await supabase
+      .from('groom_visits')
+      .select('visit_date')
+      .eq('user_id', userId)
+      .gte('visit_date', monthStart)
+      .lte('visit_date', today)
+    if (error) {
+      console.error('Erreur chargement visites groom:', error)
+      return
+    }
+    const dates = new Set(((data as Pick<GroomVisit, 'visit_date'>[]) ?? []).map(v => v.visit_date))
+    setVisitedToday(dates.has(today))
+    setDaysThisMonth(dates.size)
+  }
+
+  async function handleCheckIn() {
+    if (!userId || checkingIn) return
+    setCheckingIn(true)
+    try {
+      // amount_ttc utilise le défaut base (7.00 €) ; paid_month vide tant
+      // que le mois n'a pas été soldé par la Famille (colonne NOT NULL sans défaut).
+      const { error } = await supabase.from('groom_visits').insert({ user_id: userId, visit_date: todayYmd(), paid_month: '' })
+      if (error) throw error
+      await fetchGroomVisits()
+    } catch (err) {
+      console.error('Erreur enregistrement visite groom:', err)
+    } finally {
+      setCheckingIn(false)
+    }
+  }
 
   async function fetchData() {
     setLoading(true)
@@ -46,6 +93,8 @@ export default function Accueil({ readOnly = false }: { readOnly?: boolean }) {
       // Photo aléatoire, retirée à chaque ouverture de la page (pas la dernière).
       const photos = (photosData as AmbiancePhoto[]) ?? []
       setRandomPhoto(photos.length > 0 ? photos[Math.floor(Math.random() * photos.length)] : null)
+
+      await fetchGroomVisits()
     } catch (err) {
       console.error('Erreur chargement Accueil:', err)
     } finally {
@@ -53,7 +102,7 @@ export default function Accueil({ readOnly = false }: { readOnly?: boolean }) {
     }
   }
 
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => { fetchData() }, [isGroom, userId])
 
   // Rafraîchit les données à la fermeture de VisiteSheet
   function handleVisiteClose() {
@@ -115,6 +164,42 @@ export default function Accueil({ readOnly = false }: { readOnly?: boolean }) {
                   <CalendarCheck className="w-5 h-5" />
                   Démarrer une visite
                 </button>
+              )}
+
+              {/* ── Check-in Groom : visite du jour ── */}
+              {isGroom && (
+                <section className="bg-white rounded-2xl shadow-xs p-5 text-center space-y-3">
+                  {visitedToday ? (
+                    <>
+                      <div className="flex items-center justify-center gap-2 text-primary">
+                        <CheckCircle2 className="w-5 h-5" />
+                        <p className="text-sm font-bold">Visite du jour enregistrée</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleCheckIn}
+                        disabled={checkingIn}
+                        className="text-[11px] text-gray-400 underline cursor-pointer disabled:opacity-50"
+                      >
+                        Enregistrer une 2ᵉ visite (ne compte pas dans le mois)
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleCheckIn}
+                      disabled={checkingIn}
+                      className="w-full flex items-center justify-center gap-2.5 font-bold text-sm text-white rounded-xl shadow-sm active:scale-[0.98] transition-transform cursor-pointer disabled:opacity-60"
+                      style={{ backgroundColor: '#2f6b3f', minHeight: '56px' }}
+                    >
+                      <CalendarCheck className="w-5 h-5" />
+                      {checkingIn ? 'Enregistrement...' : "J'arrive aujourd'hui"}
+                    </button>
+                  )}
+                  <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">
+                    {daysThisMonth} jour{daysThisMonth > 1 ? 's' : ''} enregistré{daysThisMonth > 1 ? 's' : ''} ce mois-ci
+                  </p>
+                </section>
               )}
 
               {/* ── Photo d'ambiance (aléatoire à chaque ouverture) ── */}

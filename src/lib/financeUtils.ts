@@ -1,4 +1,4 @@
-import type { Horse } from './types'
+import type { Horse, GroomVisit } from './types'
 import { CANONICAL_ORDER } from './types'
 
 // ─── Domaine intervenant — aligné sur HealthEvent.type pour rester cohérent ──
@@ -44,6 +44,86 @@ export function formatDateOnlyFr(ymd: string): string {
     month: 'long',
     year: 'numeric',
   })
+}
+
+// Clé année-mois ("YYYY-MM") extraite d'une date-only — sert à regrouper les
+// jours de visite groom par mois calendaire.
+export function ymKey(ymd: string): string {
+  return ymd.slice(0, 7)
+}
+
+export function monthLabelFr(ym: string): string {
+  const [y, m] = ym.split('-').map(Number)
+  const label = new Date(y, m - 1, 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
+  return label.charAt(0).toUpperCase() + label.slice(1)
+}
+
+// "Lundi 06/07" — jour de semaine + date sans année, pour la liste dépliante
+// des visites groom.
+export function weekdayDateFr(ymd: string): string {
+  const [y, m, d] = ymd.split('-').map(Number)
+  const wd = new Date(y, m - 1, d).toLocaleDateString('fr-FR', { weekday: 'long' })
+  return `${wd.charAt(0).toUpperCase()}${wd.slice(1)} ${pad(d)}/${pad(m)}`
+}
+
+// Mois calendaire suivant une clé "YYYY-MM".
+function nextYm(ym: string): string {
+  const [y, m] = ym.split('-').map(Number)
+  const d = new Date(y, m, 1) // m (1-indexé) devient l'index 0-indexé du mois suivant
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`
+}
+
+// Un mois déjà utilisé pour un règlement (paid_month) ne peut pas resservir —
+// une visite datée dans un mois déjà soldé (règlement anticipé en cours de
+// mois) est reportée sur le mois suivant disponible.
+export function effectivePeriodYm(ym: string, usedPeriods: Set<string>): string {
+  let period = ym
+  while (usedPeriods.has(period)) period = nextYm(period)
+  return period
+}
+
+export interface UnsettledGroomPeriod {
+  ym: string
+  days: number
+  proposedAmount: number
+  visitIds: string[]
+  visitDates: string[] // dates distinctes facturables, triées
+}
+
+// Regroupe les visites non soldées par période effective (mois calendaire, ou
+// reporté si ce mois a déjà fait l'objet d'un règlement). Une 2e visite le
+// même jour ne compte ni dans `days` ni dans `proposedAmount` (seule la plus
+// ancienne du jour est retenue), mais son id reste dans `visitIds` pour être
+// soldée avec le reste de la période.
+export function groupUnsettledGroomVisits(visits: GroomVisit[], usedPeriods: Set<string>): UnsettledGroomPeriod[] {
+  const byPeriod = new Map<string, GroomVisit[]>()
+  visits.forEach(v => {
+    const period = effectivePeriodYm(ymKey(v.visit_date), usedPeriods)
+    if (!byPeriod.has(period)) byPeriod.set(period, [])
+    byPeriod.get(period)!.push(v)
+  })
+
+  const result: UnsettledGroomPeriod[] = []
+  for (const [ym, rows] of byPeriod.entries()) {
+    const byDay = new Map<string, GroomVisit[]>()
+    rows.forEach(v => {
+      if (!byDay.has(v.visit_date)) byDay.set(v.visit_date, [])
+      byDay.get(v.visit_date)!.push(v)
+    })
+    let proposedAmount = 0
+    byDay.forEach(dayRows => {
+      const earliest = dayRows.reduce((a, b) => (a.created_at < b.created_at ? a : b))
+      proposedAmount = round2(proposedAmount + earliest.amount_ttc)
+    })
+    result.push({
+      ym,
+      days: byDay.size,
+      proposedAmount,
+      visitIds: rows.map(v => v.id),
+      visitDates: Array.from(byDay.keys()).sort(),
+    })
+  }
+  return result.sort((a, b) => a.ym.localeCompare(b.ym))
 }
 
 export function yearBoundsYmd(): { first: string; last: string; label: string } {

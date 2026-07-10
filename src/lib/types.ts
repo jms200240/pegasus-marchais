@@ -208,6 +208,18 @@ export interface Expense {
   created_at: string
 }
 
+export interface GroomVisit {
+  id: string
+  user_id: string
+  visit_date: string              // date-only (YYYY-MM-DD)
+  amount_ttc: number              // défaut base 7.00 €
+  paid_month: string              // '' tant que non réglé, sinon "YYYY-MM" du mois soldé
+  is_paid: boolean
+  paid_at: string | null
+  notes: string | null
+  created_at: string
+}
+
 export type QuizAnswer = 'A' | 'B' | 'C' | 'D'
 export type QuizNiveau = 'Facile' | 'Difficile'
 

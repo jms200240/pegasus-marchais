@@ -25,7 +25,10 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<TabType>('accueil')
   const role = useUserRole(session)
-  const readOnly = role === 'visiteur'
+  // Le groom hérite du mode lecture seule (écriture bobos/soins/photos réservée
+  // à Famille/Admin) — seule exception : son propre check-in, géré à part dans Accueil.
+  const readOnly = role === 'visiteur' || role === 'groom'
+  const isGroom = role === 'groom'
   // Admin a toujours accès à tout ce que Famille a (+ les commandes d'administration)
   const hasFamilyAccess = role === 'famille' || role === 'admin'
 
@@ -86,7 +89,7 @@ function App() {
   const renderActivePage = () => {
     switch (activeTab) {
       case 'accueil':
-        return <Accueil readOnly={readOnly} />
+        return <Accueil readOnly={readOnly} isGroom={isGroom} userId={session?.user.id ?? ''} />
       case 'soins':
         return <Soins readOnly={readOnly} />
       case 'chevaux':
