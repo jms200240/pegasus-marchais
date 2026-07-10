@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import type { AmbiancePhoto, FarmAlert, GroomVisit } from '../lib/types'
+import type { AmbiancePhoto, FarmAlert } from '../lib/types'
 import { formatDateTime } from '../lib/types'
 import { Wheat, Droplets, CalendarCheck, Image as ImageIcon, Stethoscope, CheckCircle2 } from 'lucide-react'
 import { todayYmd } from '../lib/financeUtils'
@@ -35,26 +35,21 @@ export default function Accueil({
   const [visiteOpen, setVisiteOpen] = useState(false)
   const [visiteProOpen, setVisiteProOpen] = useState(false)
   const [visitedToday, setVisitedToday] = useState(false)
-  const [daysThisMonth, setDaysThisMonth] = useState(0)
   const [checkingIn, setCheckingIn] = useState(false)
 
   async function fetchGroomVisits() {
     if (!isGroom || !userId) return
-    const today = todayYmd()
-    const monthStart = `${today.slice(0, 7)}-01`
     const { data, error } = await supabase
       .from('groom_visits')
-      .select('visit_date')
+      .select('id')
       .eq('user_id', userId)
-      .gte('visit_date', monthStart)
-      .lte('visit_date', today)
+      .eq('visit_date', todayYmd())
+      .limit(1)
     if (error) {
       console.error('Erreur chargement visites groom:', error)
       return
     }
-    const dates = new Set(((data as Pick<GroomVisit, 'visit_date'>[]) ?? []).map(v => v.visit_date))
-    setVisitedToday(dates.has(today))
-    setDaysThisMonth(dates.size)
+    setVisitedToday(((data as { id: string }[]) ?? []).length > 0)
   }
 
   async function handleCheckIn() {
@@ -196,9 +191,6 @@ export default function Accueil({
                       {checkingIn ? 'Enregistrement...' : "J'arrive aujourd'hui"}
                     </button>
                   )}
-                  <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">
-                    {daysThisMonth} jour{daysThisMonth > 1 ? 's' : ''} enregistré{daysThisMonth > 1 ? 's' : ''} ce mois-ci
-                  </p>
                 </section>
               )}
 
@@ -231,7 +223,7 @@ export default function Accueil({
               </section>
 
               {/* ── Bouton Démarrer une visite pro ── */}
-              {!readOnly && (
+              {(!readOnly || isGroom) && (
                 <button
                   type="button"
                   onClick={() => setVisiteProOpen(true)}
