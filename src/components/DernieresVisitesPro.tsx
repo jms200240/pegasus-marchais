@@ -17,15 +17,28 @@ export default function DernieresVisitesPro() {
   useEffect(() => {
     async function fetchData() {
       setLoading(true)
-      const { data } = await supabase
-        .from('health_events')
-        .select('type, opened_at')
-        .in('type', METIER_ORDER.map(m => m.type))
+      const [{ data }, { data: vaccData }] = await Promise.all([
+        supabase
+          .from('health_events')
+          .select('type, opened_at')
+          .in('type', METIER_ORDER.map(m => m.type)),
+        supabase.from('vaccinations').select('injection_date'),
+      ])
       const map: Record<string, string> = {}
       for (const row of (data as Pick<HealthEvent, 'type' | 'opened_at'>[]) ?? []) {
         if (!row.type) continue
         if (!map[row.type] || row.opened_at > map[row.type]) map[row.type] = row.opened_at
       }
+
+      // Un vaccin administré compte aussi comme une visite véto, même sans "Soin véto" explicite.
+      const lastVaccinDate = (vaccData as { injection_date: string }[] | null ?? []).reduce<string | null>(
+        (max, r) => (!r.injection_date ? max : !max || r.injection_date > max ? r.injection_date : max),
+        null
+      )
+      if (lastVaccinDate && (!map.veterinaire || lastVaccinDate > map.veterinaire.slice(0, 10))) {
+        map.veterinaire = lastVaccinDate
+      }
+
       setLastByType(map)
       setLoading(false)
     }
