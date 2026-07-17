@@ -10,6 +10,9 @@ import haschich from '../assets/chevaux/haschich.jpg'
 import kwetsche from '../assets/chevaux/kwetsche.jpg'
 import lichen from '../assets/chevaux/lichen.jpg'
 import pomme from '../assets/chevaux/pomme.jpg'
+import litchi from '../assets/chevaux/litchi.jpg'
+import nectarine from '../assets/chevaux/nectarine.jpg'
+import hyacinthe from '../assets/chevaux/hyacinthe.jpg'
 
 // Photos statiques bundlées (cf. règle "Photos vétérinaires" étendue aux
 // chevaux) — clé = nom canonique du cheval, pas de photo_url Supabase Storage.
@@ -26,4 +29,7 @@ export const HORSE_PHOTOS: Record<string, string> = {
   'Lichen': lichen,
   'Pomme': pomme,
   'Cerise (1977)': cerise1977,
+  'Litchi': litchi,
+  'Nectarine': nectarine,
+  'Hyacinthe': hyacinthe,
 }
