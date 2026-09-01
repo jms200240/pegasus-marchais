@@ -23,6 +23,7 @@ interface SuiviCoutsProps {
 type DrillTarget =
   | { kind: 'horse'; horseId: string }
   | { kind: 'prestataire'; intervenant: IntervenantType }
+  | { kind: 'detail'; horseId: string; intervenant: IntervenantType; back: DrillTarget }
 
 // ─── Bar chart horizontal réutilisable ────────────────────────────────────
 interface BarRowProps {
@@ -167,6 +168,7 @@ export default function SuiviCouts({ onBack }: SuiviCoutsProps) {
                   amount={r.total}
                   pct={max > 0 ? (r.total / max) * 100 : 0}
                   color={INTERVENANT_COLORS[r.type]}
+                  onClick={() => setDrill({ kind: 'detail', horseId: drill.horseId, intervenant: r.type, back: drill })}
                 />
               ))}
             </section>
@@ -225,12 +227,78 @@ export default function SuiviCouts({ onBack }: SuiviCoutsProps) {
                     amount={r.total}
                     pct={max > 0 ? (r.total / max) * 100 : 0}
                     color={color}
+                    onClick={() => setDrill({ kind: 'detail', horseId: r.horse.id, intervenant: drill.intervenant, back: drill })}
                   />
                 )
               })}
             </section>
           )}
         </div>
+      </div>
+    )
+  }
+
+  // ── Écran détail : lignes de facture pour un cheval + un prestataire ────
+  if (drill?.kind === 'detail') {
+    const horse = horses.find(h => h.id === drill.horseId) ?? null
+    const lines = expenses
+      .filter(e => e.horse_id === drill.horseId && e.intervenant_type === drill.intervenant)
+      .sort((a, b) => b.expense_date.localeCompare(a.expense_date))
+    const subtotal = round2(lines.reduce((s, e) => s + e.amount_ttc, 0))
+
+    return (
+      <div className="flex-1 flex flex-col">
+        <div className="px-5 pt-5 pb-3 flex items-center gap-3">
+          <button type="button" onClick={() => setDrill(drill.back)} className="cursor-pointer text-gray-400 hover:text-gray-600">
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 leading-tight">
+              {horse?.name ?? '—'} · {INTERVENANT_LABELS[drill.intervenant]}
+            </h1>
+            <p className="text-xs text-gray-500 mt-0.5">Lignes de facture — {yearLabel}</p>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto no-scrollbar px-4 pb-6 space-y-5">
+          <section className="bg-white rounded-2xl shadow-xs p-5 text-center">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Total TTC</p>
+            <p className="text-3xl font-black" style={{ color: '#2f6b3f' }}>{formatEuro(subtotal)}</p>
+          </section>
+          {lines.length === 0 ? (
+            <div className="bg-white rounded-xl p-5 text-center shadow-xs">
+              <p className="text-sm font-semibold text-gray-700">Aucune ligne enregistrée</p>
+            </div>
+          ) : (
+            <section className="space-y-2">
+              {lines.map(e => (
+                <button
+                  key={e.id}
+                  type="button"
+                  onClick={() => e.invoice_id && setSelectedInvoiceId(e.invoice_id)}
+                  disabled={!e.invoice_id}
+                  className={`w-full bg-white rounded-xl px-4 py-3 shadow-xs flex items-center justify-between gap-3 text-left ${e.invoice_id ? 'cursor-pointer hover:bg-gray-50/70 transition-colors' : 'cursor-default'}`}
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-gray-800 truncate">{e.note ?? '—'}</p>
+                    <p className="text-[11px] text-gray-400">{formatDateOnlyFr(e.expense_date)}</p>
+                  </div>
+                  <span className="text-sm font-bold text-gray-700 flex-shrink-0">{formatEuro(e.amount_ttc)}</span>
+                </button>
+              ))}
+            </section>
+          )}
+        </div>
+        {selectedInvoiceId && (
+          <InvoiceDetailSheet
+            invoiceId={selectedInvoiceId}
+            horses={horses}
+            onClose={() => setSelectedInvoiceId(null)}
+            onSaved={() => {
+              setSelectedInvoiceId(null)
+              fetchData()
+            }}
+          />
+        )}
       </div>
     )
   }
