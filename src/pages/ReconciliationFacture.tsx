@@ -411,13 +411,13 @@ export default function ReconciliationFacture({ onBack }: ReconciliationFactureP
           ))}
           <hr className="my-2 border-gray-100" />
           <div className="flex justify-between text-xs text-gray-500">
-            <span>Affecté aux chevaux (HT)</span><span>{formatEuro(allocatedHt)}</span>
+            <span>Affecté aux chevaux (TTC)</span><span>{formatEuro(round2(allocatedHt * selected.tvaMultiplier))}</span>
           </div>
           <div className="flex justify-between text-xs text-gray-400">
-            <span>Exclu (frais admin.)</span><span>{formatEuro(excludedHt)}</span>
+            <span>Exclu (frais admin., TTC)</span><span>{formatEuro(round2(excludedHt * selected.tvaMultiplier))}</span>
           </div>
           <div className="flex justify-between text-sm font-bold text-gray-800 mt-1">
-            <span>Total facture (HT)</span><span>{formatEuro(selected.totalHt)}</span>
+            <span>Total facture (TTC)</span><span>{formatEuro(selected.total_ttc)}</span>
           </div>
           <p className="text-xs font-semibold mt-2" style={{ color: reconciles ? '#2f6b3f' : '#dc2626' }}>
             {reconciles ? '✓ Réconcilié au centime' : '⚠ Écart de réconciliation'}
