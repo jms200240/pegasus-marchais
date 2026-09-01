@@ -36,7 +36,7 @@ React + TypeScript + Tailwind CSS + Vite (PWA) · Supabase (PostgreSQL + Auth + 
 
 ## État actuel (à mettre à jour à chaque sprint)
 
-Sprints livrés : S1 (fondation), S2 (module Chevaux), S3 (Soins/Bobos — BoboWizard 5 étapes, BoboCard journal), S4 (route /visite — VisiteSheet, galerie photos filtrée par tags), S5 partiel (module Finances — menu Saisie de facture / Suivi des coûts, ventilation multi-chevaux ou 1 seul cheval, bar charts drill-down cheval↔prestataire, fiche facture consultable/modifiable ; pipeline OCR/staging non démarré).
+Sprints livrés : S1 (fondation), S2 (module Chevaux), S3 (Soins/Bobos — BoboWizard 5 étapes, BoboCard journal), S4 (route /visite — VisiteSheet, galerie photos filtrée par tags), S5 (module Finances — menu Saisie de facture / Suivi des coûts, ventilation multi-chevaux ou 1 seul cheval, bar charts drill-down cheval↔prestataire, fiche facture consultable/modifiable ; pipeline OCR/staging validé end-to-end sur 2 factures réelles (n8n + Claude Vision → invoices_staging), écran de réconciliation ReconciliationFacture.tsx intégré au menu Finances).
 
 Opérationnel en production (`pegasus-marchais.vercel.app`) :
 - VeterinairePicker (10 vétérinaires, photos statiques bundlées, rang 1–10)
