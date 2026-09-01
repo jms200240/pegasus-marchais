@@ -20,10 +20,23 @@ import GaleriePhotos from './pages/GaleriePhotos'
 import Quiz from './pages/Quiz'
 import AdminSettings from './pages/AdminSettings'
 
+// Onglets vers lesquels un lien externe (deep link ?tab=) peut pointer.
+// Restreint aux valeurs connues pour ne jamais forcer un onglet invalide.
+const DEEP_LINK_TABS: TabType[] = ['accueil', 'soins', 'chevaux', 'galerie', 'quiz', 'finances']
+
+function getInitialTab(): TabType {
+  if (typeof window === 'undefined') return 'accueil'
+  const requested = new URLSearchParams(window.location.search).get('tab')
+  if (requested && (DEEP_LINK_TABS as string[]).includes(requested)) {
+    return requested as TabType
+  }
+  return 'accueil'
+}
+
 function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<TabType>('accueil')
+  const [activeTab, setActiveTab] = useState<TabType>(getInitialTab)
   const role = useUserRole(session)
   // Le groom hérite du mode lecture seule (écriture bobos/soins/photos réservée
   // à Famille/Admin) — seule exception : son propre check-in, géré à part dans Accueil.
@@ -44,6 +57,15 @@ function App() {
 
   // Modale "Changer mon mot de passe" — accessible à tout utilisateur connecté
   const [changePasswordOpen, setChangePasswordOpen] = useState(false)
+
+  // Deep link : une fois l'onglet initial appliqué, on nettoie l'URL pour que
+  // le paramètre ?tab= ne "colle" pas à la navigation ultérieure (refresh, partage).
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (window.location.search.includes('tab=')) {
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+  }, [])
 
   useEffect(() => {
     if (role !== 'admin') return
