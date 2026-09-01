@@ -86,7 +86,6 @@ export default function ReconciliationFacture({ onBack }: ReconciliationFactureP
       if (sErr) { setError(sErr.message); setLoading(false); return }
 
       const list: StagingInvoice[] = (stagingData || [])
-        // @ts-expect-error — la jointure Supabase renvoie invoices comme objet imbriqué
         .filter((row: any) => row.invoices?.status === 'staging')
         .map((row: any) => {
           const lines = (row.lines_json as ExtractedLine[]) ?? []
