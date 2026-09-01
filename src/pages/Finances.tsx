@@ -1,19 +1,21 @@
 import { useEffect, useState } from 'react'
-import { FileText, TrendingUp, Wallet, AlertCircle } from 'lucide-react'
+import { FileText, TrendingUp, Wallet, AlertCircle, ClipboardCheck } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Invoice, GroomVisit } from '../lib/types'
 import { formatEuro, round2, yearBoundsYmd, groupUnsettledGroomVisits } from '../lib/financeUtils'
 import SaisieFacture from './SaisieFacture'
 import SuiviCouts from './SuiviCouts'
 import GroomSettlement from './GroomSettlement'
+import ReconciliationFacture from './ReconciliationFacture'
 
-type FinancesView = 'menu' | 'saisie' | 'suivi' | 'groom'
+type FinancesView = 'menu' | 'saisie' | 'suivi' | 'groom' | 'reconciliation'
 
 export default function Finances() {
   const [view, setView] = useState<FinancesView>('menu')
   const [totalYear, setTotalYear] = useState(0)
   const [loadingTotal, setLoadingTotal] = useState(true)
   const [unsettledGroomCount, setUnsettledGroomCount] = useState(0)
+  const [pendingReconCount, setPendingReconCount] = useState(0)
 
   useEffect(() => {
     // Ré-exécuté à chaque retour au menu (y compris après Saisie de facture),
@@ -41,13 +43,25 @@ export default function Finances() {
       const months = groupUnsettledGroomVisits((visitsData as GroomVisit[]) ?? [], usedPeriods)
       setUnsettledGroomCount(months.length)
     }
+    async function fetchReconAlert() {
+      // Compte les factures issues de l'OCR en attente de réconciliation :
+      // staging (ocr_status='done') dont la facture liée est encore en status='staging'.
+      const { data } = await supabase
+        .from('invoices_staging')
+        .select('id, invoices(status)')
+        .eq('ocr_status', 'done')
+      const count = ((data as any[]) ?? []).filter(row => row.invoices?.status === 'staging').length
+      setPendingReconCount(count)
+    }
     fetchTotal()
     fetchGroomAlert()
+    fetchReconAlert()
   }, [view])
 
   if (view === 'saisie') return <SaisieFacture onBack={() => setView('menu')} />
   if (view === 'suivi') return <SuiviCouts onBack={() => setView('menu')} />
   if (view === 'groom') return <GroomSettlement onBack={() => setView('menu')} />
+  if (view === 'reconciliation') return <ReconciliationFacture onBack={() => setView('menu')} />
 
   return (
     <div className="flex-1 flex flex-col">
@@ -65,6 +79,31 @@ export default function Finances() {
             <p className="text-3xl font-black" style={{ color: '#2f6b3f' }}>{formatEuro(totalYear)}</p>
           </section>
         )}
+
+        <button
+          type="button"
+          onClick={() => setView('reconciliation')}
+          className="w-full bg-white rounded-2xl shadow-xs p-5 flex items-center gap-4 text-left cursor-pointer hover:bg-gray-50/70 transition-colors"
+        >
+          <div
+            className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0"
+            style={{ backgroundColor: '#fff7e6', color: '#B7791F' }}
+          >
+            <ClipboardCheck className="w-6 h-6" />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-gray-800 flex items-center gap-2">
+              Factures à valider
+              {pendingReconCount > 0 && (
+                <span className="flex-shrink-0 flex items-center gap-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
+                  <AlertCircle className="w-2.5 h-2.5" />
+                  {pendingReconCount}
+                </span>
+              )}
+            </p>
+            <p className="text-xs text-gray-400 mt-0.5">Réconciliation OCR, affectation des coûts par cheval</p>
+          </div>
+        </button>
 
         <button
           type="button"
