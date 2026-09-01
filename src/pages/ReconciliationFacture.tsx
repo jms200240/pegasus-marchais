@@ -11,6 +11,7 @@ import {
   sortByCanonicalOrder,
 } from '../lib/financeUtils'
 
+
 /* ----------------------------------------------------------------------------
    Réconciliation OCR — Pegasus
    Lit invoices_staging (status='staging' côté invoices, ocr_status='done' côté
